@@ -3,6 +3,12 @@
 #include <assert.h>
 #include <stdio.h>
 
+#ifdef _WIN32
+#define LIBQSYS_PATH "lib/libqsys.dll"
+#else
+#define LIBQSYS_PATH "lib/libqsys.so"
+#endif
+
 int
 main(void)
 {
@@ -12,10 +18,10 @@ main(void)
 	assert(qsys_dlerror() != NULL);
 	printf("ok: qsys_dlopen(invalid path) -> NULL + error\n");
 
-	/* self-open: libqsys.so is on the loader path via -L./lib */
-	void *h = qsys_dlopen("lib/libqsys.so", 0);
+	/* self-open: libqsys is on the loader path via -L./lib */
+	void *h = qsys_dlopen(LIBQSYS_PATH, 0);
 	assert(h != NULL);
-	printf("ok: qsys_dlopen(lib/libqsys.so) -> handle\n");
+	printf("ok: qsys_dlopen(%s) -> handle\n", LIBQSYS_PATH);
 
 	/* known exported symbol */
 	void *sym = qsys_dlsym(h, "qsyslog_set");
@@ -32,11 +38,11 @@ main(void)
 	printf("ok: qsys_dlclose -> 0\n");
 
 	/* QSYS_RTLD_NODELETE: flag accepted, handle still usable */
-	void *h2 = qsys_dlopen("lib/libqsys.so", QSYS_RTLD_NODELETE);
+	void *h2 = qsys_dlopen(LIBQSYS_PATH, QSYS_RTLD_NODELETE);
 	assert(h2 != NULL);
 	assert(qsys_dlsym(h2, "qsyslog_set") != NULL);
 	assert(qsys_dlclose(h2) == 0);
-	printf("ok: qsys_dlopen(QSYS_RTLD_NODELETE) -> handle\n");
+	printf("ok: qsys_dlopen(%s, QSYS_RTLD_NODELETE) -> handle\n", LIBQSYS_PATH);
 
 	printf("qsys_dlopen_test: all assertions passed\n");
 	return 0;

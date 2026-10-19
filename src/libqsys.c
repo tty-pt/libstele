@@ -68,6 +68,10 @@ qsys_strlcpy(char *dst, const char *src, size_t size)
 #include <io.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <direct.h>
+#include <process.h>
+#include <psapi.h>
+#include <signal.h>
 
 static HANDLE hEventLog = NULL;
 static char ident_buf[128] = "Application";
@@ -237,6 +241,197 @@ qsys_gmtime_r(const time_t *timer, struct tm *result)
     return gmtime_s(result, timer) == 0 ? result : NULL;
 }
 
+char *
+qsys_realpath(const char *path, char *resolved_path)
+{
+    if (resolved_path)
+        return _fullpath(resolved_path, path, _MAX_PATH);
+    char *buf = malloc(_MAX_PATH);
+    if (!buf)
+        return NULL;
+    if (!_fullpath(buf, path, _MAX_PATH)) {
+        free(buf);
+        return NULL;
+    }
+    return buf;
+}
+
+int
+qsys_mkdir(const char *path)
+{
+    return _mkdir(path);
+}
+
+int
+qsys_ftruncate(int fd, off_t length)
+{
+    return _chsize_s(fd, (long long)length) == 0 ? 0 : (errno = EIO, -1);
+}
+
+int
+qsys_dprintf(int fd, const char *fmt, ...)
+{
+    char buf[4096];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (n < 0)
+        return n;
+    if ((size_t)n >= sizeof(buf))
+        n = (int)sizeof(buf) - 1;
+    return _write(fd, buf, (unsigned)n) == n ? n : -1;
+}
+
+int
+qsys_flock(int fd, int op)
+{
+    HANDLE h = (HANDLE)_get_osfhandle(fd);
+    OVERLAPPED ov;
+    if (h == INVALID_HANDLE_VALUE || h == (HANDLE)-1) {
+        errno = EBADF;
+        return -1;
+    }
+    memset(&ov, 0, sizeof(ov));
+    if (op == QSYS_LOCK_UN)
+        return UnlockFileEx(h, 0, 1, 0, &ov) ? 0 : -1;
+    if (LockFileEx(h, LOCKFILE_EXCLUSIVE_LOCK |
+            ((op & QSYS_LOCK_NB) ? LOCKFILE_FAIL_IMMEDIATELY : 0),
+            0, 1, 0, &ov))
+        return 0;
+    errno = GetLastError() == ERROR_LOCK_VIOLATION ? EWOULDBLOCK : EACCES;
+    return -1;
+}
+
+uint64_t
+qsys_now_ms(void)
+{
+    return (uint64_t)GetTickCount64();
+}
+
+void
+qsys_sleep_ms(unsigned ms)
+{
+    Sleep(ms);
+}
+
+int
+qsys_pid_alive(pid_t pid)
+{
+    HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)pid);
+    DWORD code = 0;
+    int alive = 0;
+    if (h) {
+        if (GetExitCodeProcess(h, &code))
+            alive = code == STILL_ACTIVE;
+        CloseHandle(h);
+    }
+    return alive ? 0 : -1;
+}
+
+uint64_t
+qsys_self_rss_bytes(void)
+{
+    PROCESS_MEMORY_COUNTERS pmc;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc)))
+        return (uint64_t)pmc.WorkingSetSize;
+    return 0;
+}
+
+int
+qsys_poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+    return WSAPoll(fds, (ULONG)nfds, timeout);
+}
+
+void
+qsys_stop_on_signal(void (*handler)(int))
+{
+    signal(SIGINT, handler);
+    signal(SIGTERM, handler);
+}
+
+void
+qsys_ignore_pipe(void)
+{
+}
+
+/* Socket shims - Windows */
+int qsys_sock_init(void)
+{
+    static int done;
+    if (!done) {
+        WSADATA wsa;
+        if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+            return -1;
+        done = 1;
+    }
+    return 0;
+}
+
+qsys_socket_t qsys_sock_create(int domain, int type, int protocol)
+{
+    qsys_sock_init();
+    return (qsys_socket_t)socket(domain, type, protocol);
+}
+
+int qsys_sock_close(qsys_socket_t fd)
+{
+    return closesocket((SOCKET)fd);
+}
+
+ssize_t qsys_sock_recv(qsys_socket_t fd, void *buf, size_t len, int flags)
+{
+    return (ssize_t)recv((SOCKET)fd, (char *)buf, (int)len, flags);
+}
+
+ssize_t qsys_sock_send(qsys_socket_t fd, const void *buf, size_t len, int flags)
+{
+    return (ssize_t)send((SOCKET)fd, (const char *)buf, (int)len, flags);
+}
+
+int qsys_sock_bind(qsys_socket_t fd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    return bind((SOCKET)fd, addr, (int)addrlen);
+}
+
+int qsys_sock_listen(qsys_socket_t fd, int backlog)
+{
+    return listen((SOCKET)fd, backlog);
+}
+
+qsys_socket_t qsys_sock_accept(qsys_socket_t fd, struct sockaddr *addr, socklen_t *addrlen)
+{
+    int alen = addrlen ? (int)*addrlen : 0;
+    qsys_socket_t res = (qsys_socket_t)accept((SOCKET)fd, addr, addrlen ? &alen : NULL);
+    if (addrlen) *addrlen = (socklen_t)alen;
+    return res;
+}
+
+int qsys_sock_connect(qsys_socket_t fd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    return connect((SOCKET)fd, addr, (int)addrlen);
+}
+
+int qsys_sock_set_nonblock(qsys_socket_t fd, int nonblock)
+{
+    u_long mode = nonblock ? 1 : 0;
+    return ioctlsocket((SOCKET)fd, FIONBIO, &mode) == 0 ? 0 : -1;
+}
+
+int qsys_sock_wouldblock(void)
+{
+    int e = WSAGetLastError();
+    return e == WSAEWOULDBLOCK;
+}
+
+const char *qsys_sock_strerror(void)
+{
+    static char buf[40];
+    snprintf(buf, sizeof(buf), "winsock error %d", WSAGetLastError());
+    return buf;
+}
+
 #else /* POSIX ---------------------------------------------------------------- */
 
 #include <syslog.h>
@@ -244,6 +439,13 @@ qsys_gmtime_r(const time_t *timer, struct tm *result)
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
+#include <sys/file.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
 
 void qsys_openlog(const char *ident) {
     openlog(ident, LOG_PID | LOG_CONS, LOG_USER);
@@ -319,6 +521,168 @@ struct tm *
 qsys_gmtime_r(const time_t *timer, struct tm *result)
 {
 	return gmtime_r(timer, result);
+}
+
+char *
+qsys_realpath(const char *path, char *resolved_path)
+{
+	return realpath(path, resolved_path);
+}
+
+int
+qsys_mkdir(const char *path)
+{
+	return mkdir(path, 0755);
+}
+
+int
+qsys_ftruncate(int fd, off_t length)
+{
+	return ftruncate(fd, length);
+}
+
+int
+qsys_dprintf(int fd, const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	int ret = vdprintf(fd, fmt, ap);
+	va_end(ap);
+	return ret;
+}
+
+int
+qsys_flock(int fd, int op)
+{
+	int posix_op = 0;
+	if (op & QSYS_LOCK_SH) posix_op |= LOCK_SH;
+	if (op & QSYS_LOCK_EX) posix_op |= LOCK_EX;
+	if (op & QSYS_LOCK_NB) posix_op |= LOCK_NB;
+	if (op & QSYS_LOCK_UN) posix_op |= LOCK_UN;
+	return flock(fd, posix_op);
+}
+
+uint64_t
+qsys_now_ms(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+}
+
+void
+qsys_sleep_ms(unsigned ms)
+{
+	struct timespec req = {
+		.tv_sec = ms / 1000,
+		.tv_nsec = (long)(ms % 1000) * 1000000
+	};
+	nanosleep(&req, NULL);
+}
+
+int
+qsys_pid_alive(pid_t pid)
+{
+	return kill(pid, 0);
+}
+
+uint64_t
+qsys_self_rss_bytes(void)
+{
+	struct rusage ru;
+	if (getrusage(RUSAGE_SELF, &ru) == 0)
+		return (uint64_t)ru.ru_maxrss * 1024;
+	return 0;
+}
+
+int
+qsys_poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+	return poll(fds, nfds, timeout);
+}
+
+void
+qsys_stop_on_signal(void (*handler)(int))
+{
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = handler;
+	sigaction(SIGTERM, &sa, NULL);
+	sigaction(SIGINT, &sa, NULL);
+}
+
+void
+qsys_ignore_pipe(void)
+{
+	signal(SIGPIPE, SIG_IGN);
+}
+
+/* Socket shims - POSIX */
+int qsys_sock_init(void)
+{
+    return 0;
+}
+
+qsys_socket_t qsys_sock_create(int domain, int type, int protocol)
+{
+    return socket(domain, type, protocol);
+}
+
+int qsys_sock_close(qsys_socket_t fd)
+{
+    return close(fd);
+}
+
+ssize_t qsys_sock_recv(qsys_socket_t fd, void *buf, size_t len, int flags)
+{
+    return recv(fd, buf, len, flags);
+}
+
+ssize_t qsys_sock_send(qsys_socket_t fd, const void *buf, size_t len, int flags)
+{
+    return send(fd, buf, len, flags);
+}
+
+int qsys_sock_bind(qsys_socket_t fd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    return bind(fd, addr, addrlen);
+}
+
+int qsys_sock_listen(qsys_socket_t fd, int backlog)
+{
+    return listen(fd, backlog);
+}
+
+qsys_socket_t qsys_sock_accept(qsys_socket_t fd, struct sockaddr *addr, socklen_t *addrlen)
+{
+    return accept(fd, addr, addrlen);
+}
+
+int qsys_sock_connect(qsys_socket_t fd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    return connect(fd, addr, addrlen);
+}
+
+int qsys_sock_set_nonblock(qsys_socket_t fd, int nonblock)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0)
+        return -1;
+    if (nonblock)
+        flags |= O_NONBLOCK;
+    else
+        flags &= ~O_NONBLOCK;
+    return fcntl(fd, F_SETFL, flags);
+}
+
+int qsys_sock_wouldblock(void)
+{
+    return errno == EAGAIN || errno == EWOULDBLOCK;
+}
+
+const char *qsys_sock_strerror(void)
+{
+    return strerror(errno);
 }
 
 #endif /* _WIN32 */
