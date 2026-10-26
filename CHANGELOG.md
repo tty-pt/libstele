@@ -1,4 +1,4 @@
-## [1.3.1]
+## [1.4.0]
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/tty-pt/libqsys/main/logo.png" alt="libqsys logo" width="220" />
