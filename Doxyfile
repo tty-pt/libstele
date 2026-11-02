@@ -1,2 +1,2 @@
-PROJECT_NAME           = "qsys"
+PROJECT_NAME           = "stele"
 @INCLUDE = ../mk/Doxyfile

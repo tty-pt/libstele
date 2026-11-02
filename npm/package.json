@@ -1,8 +1,8 @@
 {
-  "name": "@ttypt/qsys",
-  "version": "0.1.0",
+  "name": "@tty-pt/stele",
+  "version": "1.5.1",
   "type": "module",
-  "description": "Universal Node.js and Browser bindings for libqsys system substrate and isomorphic C runtime contracts",
+  "description": "Universal Node.js and Browser bindings for libstele system substrate and isomorphic C runtime contracts",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -14,14 +14,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "build:native": "mkdir -p build/Release && gcc -O3 -fPIC -shared -I/usr/include/node -I../include native/qsys_napi.c -L../lib -Wl,-rpath,../lib -L/usr/lib -lqsys -o build/Release/qsys_node.node 2>/dev/null || true",
-    "build:wasm": "clang --target=wasm32-wasi -mexec-model=reactor -Wl,--no-entry -Wl,--allow-undefined -Wl,--export=malloc -Wl,--export=free -Wl,--export=qsys_wasm_version -O3 -o dist/qsys.wasm wasm/qsys_wasm.c",
+    "build:native": "mkdir -p build/Release && gcc -O3 -fPIC -shared -I/usr/include/node -I../include -I/usr/include native/stele_napi.c -L../lib -Wl,-rpath,../lib -L/usr/lib -lstele -o build/Release/stele_node.node 2>/dev/null || true",
+    "build:wasm": "make -C .. wasm",
     "build": "npm run build:native && npm run build:wasm",
-    "test": "node --test tests/qsys.test.mjs"
+    "test": "node --test tests/stele.test.mjs"
   },
   "keywords": [
-    "qsys",
-    "libqsys",
+    "stele",
+    "stl",
+    "libstele",
     "substrate",
     "isomorphic",
     "iso",
@@ -33,11 +34,11 @@
   "license": "BSD-2-Clause",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tty-pt/libqsys.git",
+    "url": "git+https://github.com/tty-pt/libstele.git",
     "directory": "npm"
   },
-  "homepage": "https://github.com/tty-pt/libqsys/tree/main/npm#readme",
+  "homepage": "https://github.com/tty-pt/libstele/tree/main/npm#readme",
   "bugs": {
-    "url": "https://github.com/tty-pt/libqsys/issues"
+    "url": "https://github.com/tty-pt/libstele/issues"
   }
 }
