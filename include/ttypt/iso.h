@@ -69,4 +69,20 @@
 
 #endif
 
+/*
+ * DEPRECATED: WASM_EXPORT, WASM_EXPORT_AS, and WASM_IMPORT are fully deprecated.
+ * Use canonical ISO_EXPORT, ISO_EXPORT_AS, and ISO_IMPORT from <ttypt/iso.h> instead.
+ */
+#ifndef WASM_EXPORT
+#define WASM_EXPORT(ret, name, ...) ISO_EXPORT(ret, name, __VA_ARGS__)
+#endif
+
+#ifndef WASM_EXPORT_AS
+#define WASM_EXPORT_AS(ret, c_name, wasm_name, ...) ISO_EXPORT_AS(ret, c_name, wasm_name, __VA_ARGS__)
+#endif
+
+#ifndef WASM_IMPORT
+#define WASM_IMPORT(ret, module_name, name, ...) ISO_IMPORT(ret, module_name, name, __VA_ARGS__)
+#endif
+
 #endif /* TTYPT_ISO_H */
