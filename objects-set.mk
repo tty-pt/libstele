@@ -1,1 +1,1 @@
-CFLAGS-libqsys-o := -fPIC
+CFLAGS-libstele-o := -fPIC

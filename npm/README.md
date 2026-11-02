@@ -1,71 +1,52 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/tty-pt/libqsys/main/logo.png" alt="@ttypt/qsys logo" width="220" />
-</p>
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tty-pt/libstele/main/logo.png" alt="@tty-pt/stele logo" width="220" />
+</div>
 
-# @ttypt/qsys
+# @tty-pt/stele
 
-[![npm version](https://img.shields.io/badge/npm-v0.1.0-CB3837?logo=npm)](#)
-[![License: BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue)](#)
-[![TypeScript Ready](https://img.shields.io/badge/TypeScript-Ready-3178C6?logo=typescript)](#)
-[![Node.js Native](https://img.shields.io/badge/Node.js-N--API-339933?logo=node.js)](#)
-[![WebAssembly](https://img.shields.io/badge/WebAssembly-Reactor-654FF0?logo=webassembly)](#)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)](#)
+[![npm version](https://img.shields.io/npm/v/@tty-pt/stele.svg)](https://www.npmjs.com/package/@tty-pt/stele)
+[![License: BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](LICENSE)
+[![Standards: WebAssembly Reactor](https://img.shields.io/badge/WASM-Reactor--Substrate-orange.svg)](#)
 
-> Universal Node.js and Browser bindings for **`libqsys`**, the zero-dependency system substrate for plain C and isomorphic WebAssembly. Provides high-resolution monotonic clocks, memory diagnostics, and the decoupled `CapabilityRegistry` plug-and-play contract.
+> Universal Node.js and Browser bindings for **`libstele`**, the zero-dependency system substrate for plain C and isomorphic WebAssembly. Provides high-resolution monotonic clocks, memory diagnostics, and the decoupled `CapabilityRegistry` plug-and-play contract.
 
 ---
 
-## 1. Quickstart
+## 1. Quick Start
+
+Install via npm:
 
 ```bash
-npm install @ttypt/qsys
+npm install @tty-pt/stele
 ```
 
-```typescript
-import { nowMs, selfRssBytes, CapabilityRegistry } from "@ttypt/qsys";
+Usage in modern JavaScript / TypeScript:
 
-// 1. High-resolution monotonic timestamp (milliseconds)
-const start = nowMs();
+```javascript
+import { nowMs, selfRssBytes, CapabilityRegistry } from "@tty-pt/stele";
 
-// 2. Memory diagnostics
-const rss = selfRssBytes();
-console.log(`Resident memory: ${(rss / 1024 / 1024).toFixed(2)} MB`);
+console.log(`Current process monotonic time: ${nowMs()} ms`);
+console.log(`Resident Set Size (RSS): ${selfRssBytes()} bytes`);
 
-// 3. Decoupled Plug-and-Play Capability Registry
-const registry = new CapabilityRegistry();
-registry.register("temporal", myTemporalModule);
-registry.register("spatial", mySpatialModule);
-
-const temporal = registry.get("temporal");
+const caps = new CapabilityRegistry();
+caps.register("audio", (root, wasm) => ({
+  play: (url) => console.log("Playing audio:", url)
+}));
 ```
 
 ---
 
-## 2. Universal Isomorphic Contract (`<ttypt/iso.h>`)
+## 2. Isomorphic C Header Packaging
 
-`libqsys` defines the standard isomorphic C capability contract used across the entire `tty.pt` stack:
-- `ISO_EXPORT(ret, name, ...)`
-- `ISO_EXPORT_AS(ret, c_name, wasm_name, ...)`
-- `ISO_IMPORT(ret, module_name, name, ...)`
+`libstele` defines the standard isomorphic C capability contract used across the entire `tty.pt` stack:
 
----
+- `<ttypt/stele.h>`: Cross-platform POSIX/Win32 socket and system shims.
+- `<ttypt/iso.h>`: Universal `ISO_EXPORT` and `ISO_IMPORT` macros for isomorphic C modules compiled natively for SSR and into `.wasm` for the browser.
+- `<ttypt/stele_wasm.h>`: Universal single-instantiation WASM kernel substrate and slot orchestration ABI.
 
-## 3. C Development Headers via NPM
+When building native Node addons or WebAssembly reactors:
 
 ```makefile
-CFLAGS += -I./node_modules/@ttypt/qsys/include
-LDLIBS += -lqsys
+CFLAGS += -I./node_modules/@tty-pt/stele/include
+LDLIBS += -lstele
 ```
-
----
-
-## 4. Building from Source
-
-```bash
-make npm-build    # Compiles native addon and WASM reactor
-make npm-test     # Runs verification test suite
-```
-
-## License
-
-BSD 2-Clause License. Copyright (c) 2026, tty-pt.

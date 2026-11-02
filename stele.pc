@@ -1,0 +1,10 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libstele
+Description: Cross-platform C systems substrate & WebAssembly runtime
+Version: 1.5.0
+Libs: -L${libdir} -lstele
+Cflags: -I${includedir}

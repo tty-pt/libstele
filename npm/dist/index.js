@@ -11,11 +11,11 @@ let nativeBinding = null;
 try {
   const req = createRequire(import.meta.url);
   try {
-    nativeBinding = req("../build/Release/qsys_node.node");
+    nativeBinding = req("../build/Release/stele_node.node");
   } catch {}
   if (!nativeBinding) {
     try {
-      nativeBinding = req(path.join(process.cwd(), "build/Release/qsys_node.node"));
+      nativeBinding = req(path.join(process.cwd(), "build/Release/stele_node.node"));
     } catch {}
   }
 } catch {
@@ -115,42 +115,41 @@ export class WasmSubstrate {
   }
 
   kernelBoot() {
-    if (this.instance.exports.qsys_kernel_boot) {
-      return this.instance.exports.qsys_kernel_boot();
-    }
+    const fn = this.instance.exports.stl_kernel_boot || this.instance.exports.stele_kernel_boot;
+    if (fn) return fn();
     return 0;
   }
 
   kernelMount(slot, name, json = "{}") {
-    if (!this.instance.exports.qsys_kernel_mount) return -1;
+    const mountFn = this.instance.exports.stl_kernel_mount || this.instance.exports.stele_kernel_mount;
+    if (!mountFn) return -1;
     const [namePtr] = this.encodeString(name);
     const [jsonPtr, jsonLen] = this.encodeString(json);
-    const res = this.instance.exports.qsys_kernel_mount(slot, namePtr, jsonPtr, jsonLen);
+    const res = mountFn(slot, namePtr, jsonPtr, jsonLen);
     this.free(namePtr);
     this.free(jsonPtr);
     return res;
   }
 
   kernelAction(slot, actionId, data = "") {
-    if (!this.instance.exports.qsys_kernel_action) return -1;
+    const actionFn = this.instance.exports.stl_kernel_action || this.instance.exports.stele_kernel_action;
+    if (!actionFn) return -1;
     const [dataPtr] = this.encodeString(data);
-    const res = this.instance.exports.qsys_kernel_action(slot, actionId, dataPtr);
+    const res = actionFn(slot, actionId, dataPtr);
     this.free(dataPtr);
     return res;
   }
 
   kernelUnmount(slot) {
-    if (this.instance.exports.qsys_kernel_unmount) {
-      return this.instance.exports.qsys_kernel_unmount(slot);
-    }
+    const unmountFn = this.instance.exports.stl_kernel_unmount || this.instance.exports.stele_kernel_unmount;
+    if (unmountFn) return unmountFn(slot);
     return 0;
   }
 
   kernelVersion() {
-    if (this.instance.exports.qsys_kernel_version) {
-      return Number(this.instance.exports.qsys_kernel_version());
-    }
-    return 1;
+    const fn = this.instance.exports.stl_kernel_version || this.instance.exports.stele_kernel_version;
+    if (fn) return Number(fn());
+    return 2;
   }
 
   registerModule(name, api) {
@@ -172,47 +171,55 @@ export class WasmSubstrate {
 }
 
 export function getDefaultImports() {
+  const steleImports = {
+    stl_host_emit_patch: () => {},
+    stl_host_log: () => {},
+    stl_host_fetch: () => {},
+    stl_host_set_location: () => {},
+    stl_host_invalidate: () => {},
+    stele_host_emit_patch: () => {},
+    stele_host_log: () => {},
+    stele_host_fetch: () => {},
+    stele_host_set_location: () => {},
+    stele_host_invalidate: () => {},
+  };
   return {
-    bud: {
-      bud_host_emit_patch: () => {},
-      bud_host_log: () => {},
-      bud_host_fetch: () => {},
-      bud_host_set_location: () => {},
-      bud_host_mark_dirty: () => {},
-      bud_host_flush: () => {},
-    },
-    qsys: {
-      qsys_host_emit_patch: () => {},
-      qsys_host_log: () => {},
-      qsys_host_fetch: () => {},
-      qsys_host_set_location: () => {},
-    },
+    stele: steleImports,
+    stl: steleImports,
     audio: {
-      qsys_audio_play: () => 0,
-      qsys_audio_pause: () => 0,
-      qsys_audio_seek: () => 0,
-      qsys_audio_get_time: () => 0,
+      stl_audio_play: () => 0,
+      stl_audio_pause: () => 0,
+      stl_audio_seek: () => 0,
+      stl_audio_get_time: () => 0,
+      stele_audio_play: () => 0,
+      stele_audio_pause: () => 0,
+      stele_audio_seek: () => 0,
+      stele_audio_get_time: () => 0,
     },
     storage: {
-      qsys_storage_get: () => 0,
-      qsys_storage_set: () => 0,
+      stl_storage_get: () => 0,
+      stl_storage_set: () => 0,
+      stele_storage_get: () => 0,
+      stele_storage_set: () => 0,
     },
     canvas: {
-      qsys_canvas_blit: () => 0,
+      stl_canvas_blit: () => 0,
+      stele_canvas_blit: () => 0,
     },
     clipboard: {
-      qsys_clipboard_copy: () => 0,
+      stl_clipboard_copy: () => 0,
+      stele_clipboard_copy: () => 0,
     },
     wasi_snapshot_preview1: new Proxy({}, { get: () => () => 0 })
   };
 }
 
-function resolveQsysWasmPath() {
+function resolveSteleWasmPath() {
   const candidates = [
-    path.join(__dirname, "qsys.wasm"),
-    path.join(process.cwd(), "node_modules/@ttypt/qsys/dist/qsys.wasm"),
-    path.join(process.cwd(), "external/libqsys/npm/dist/qsys.wasm"),
-    path.join(process.cwd(), "site/external/libqsys/npm/dist/qsys.wasm")
+    path.join(__dirname, "stele.wasm"),
+    path.join(process.cwd(), "node_modules/@tty-pt/stele/dist/stele.wasm"),
+    path.join(process.cwd(), "external/libstele/npm/dist/stele.wasm"),
+    path.join(process.cwd(), "site/external/libstele/npm/dist/stele.wasm")
   ];
   for (const c of candidates) {
     try {
@@ -234,14 +241,14 @@ export function getSubstrate() {
   let wasmInst = null;
   if (typeof process !== "undefined" && process.versions?.node) {
     try {
-      const wasmPath = resolveQsysWasmPath();
+      const wasmPath = resolveSteleWasmPath();
       if (fs.existsSync(wasmPath)) {
         const wasmBuf = fs.readFileSync(wasmPath);
         const wasmMod = new WebAssembly.Module(wasmBuf);
         wasmInst = new WebAssembly.Instance(wasmMod, getDefaultImports());
       }
     } catch (err) {
-      console.warn("Unable to boot qsys.wasm synchronously:", err.message);
+      console.warn("Unable to boot stele.wasm synchronously:", err.message);
     }
   }
 
@@ -275,10 +282,10 @@ export async function getSubstrateAsync() {
 
   let wasmBytes = null;
   if (typeof process !== "undefined" && process.versions?.node) {
-    const wasmPath = resolveQsysWasmPath();
+    const wasmPath = resolveSteleWasmPath();
     wasmBytes = fs.readFileSync(wasmPath);
   } else if (typeof fetch !== "undefined") {
-    const res = await fetch(new URL("qsys.wasm", import.meta.url));
+    const res = await fetch(new URL("stele.wasm", import.meta.url));
     wasmBytes = await res.arrayBuffer();
   }
 
