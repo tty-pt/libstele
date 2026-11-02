@@ -20,27 +20,34 @@
 
 #if defined(__wasm__)
 
+  #define _ISO_STR(s) #s
+  #define _ISO_XSTR(s) _ISO_STR(s)
+
   /**
    * @brief Universal WebAssembly export attribute where C name == WASM export name.
    */
+  #ifndef ISO_EXPORT
   #define ISO_EXPORT(ret, name, ...) \
-      __attribute__((export_name(#name))) \
+      __attribute__((export_name(_ISO_XSTR(name)))) \
       ret name(__VA_ARGS__)
+  #endif
 
   /**
    * @brief Universal WebAssembly export attribute with an explicit WASM export alias.
    * Preserves existing internal C caller identifiers while exposing clean WASM export names.
    */
+  #ifndef ISO_EXPORT_AS
   #define ISO_EXPORT_AS(ret, c_name, wasm_name, ...) \
-      __attribute__((export_name(#wasm_name))) \
+      __attribute__((export_name(_ISO_XSTR(wasm_name)))) \
       ret c_name(__VA_ARGS__)
+  #endif
 
   /**
    * @brief Universal WebAssembly host import attribute.
    * Binds return type, import module namespace, function name, and parameters.
    */
   #define ISO_IMPORT(ret, module_name, name, ...) \
-      __attribute__((import_module(#module_name), import_name(#name))) \
+      __attribute__((import_module(_ISO_XSTR(module_name)), import_name(_ISO_XSTR(name)))) \
       ret name(__VA_ARGS__)
 
 #else

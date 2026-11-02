@@ -1,0 +1,43 @@
+{
+  "name": "@ttypt/qsys",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Universal Node.js and Browser bindings for libqsys system substrate and isomorphic C runtime contracts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "include",
+    "assets",
+    "*.pc",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:native": "mkdir -p build/Release && gcc -O3 -fPIC -shared -I/usr/include/node -I../include native/qsys_napi.c -L../lib -Wl,-rpath,../lib -L/usr/lib -lqsys -o build/Release/qsys_node.node 2>/dev/null || true",
+    "build:wasm": "clang --target=wasm32-wasi -mexec-model=reactor -Wl,--no-entry -Wl,--allow-undefined -Wl,--export=malloc -Wl,--export=free -Wl,--export=qsys_wasm_version -O3 -o dist/qsys.wasm wasm/qsys_wasm.c",
+    "build": "npm run build:native && npm run build:wasm",
+    "test": "node --test tests/qsys.test.mjs"
+  },
+  "keywords": [
+    "qsys",
+    "libqsys",
+    "substrate",
+    "isomorphic",
+    "iso",
+    "system",
+    "napi",
+    "wasm"
+  ],
+  "author": "Paulo Quirino",
+  "license": "BSD-2-Clause",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tty-pt/libqsys.git",
+    "directory": "npm"
+  },
+  "homepage": "https://github.com/tty-pt/libqsys/tree/main/npm#readme",
+  "bugs": {
+    "url": "https://github.com/tty-pt/libqsys/issues"
+  }
+}

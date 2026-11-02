@@ -1,15 +1,11 @@
 ## [1.4.0]
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/tty-pt/libqsys/main/logo.png" alt="libqsys logo" width="220" />
-</p>
-
 - **Universal Isomorphic C Contract (`<ttypt/iso.h>`)**:
   - Introduced `<ttypt/iso.h>` providing platform-independent `ISO_EXPORT`, `ISO_EXPORT_AS`, and `ISO_IMPORT` macros.
   - Symmetrical compilation across native shared libraries (`.so` / `.dylib`) with default symbol visibility and WebAssembly reactor bundles (`.wasm`) with direct `export_name` attributes.
   - Zero preprocessor conditionals required in consuming application and component source code.
 
-## 1.3.0
+## [1.3.0]
 
 - **Consolidated socket & portability shims**: full cross-platform shims for
   sockets (`qsys_sock_*`), polling (`qsys_poll`), advisory locking
@@ -21,7 +17,7 @@
   for Win32 socket and PSAPI symbols.
 - Added comprehensive unit tests in `src/qsys_port_test.c`.
 
-## 1.2.2
+## [1.2.2]
 
 - **Documentation-only release: no source or header behaviour changed.** Every
   declaration in `include/ttypt/qsys.h` is now documented Doxygen-style —
