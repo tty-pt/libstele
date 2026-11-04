@@ -7,6 +7,8 @@
  * event routing with zero site-specific JS.
  */
 
+import { createBudWasmBridge } from './bud-hydrate.js';
+
 window.__wasm_capability_registry = window.__wasm_capability_registry || {};
 window.registerWasmCapability = (namespace, factory) => {
 	window.__wasm_capability_registry[namespace] = factory;
@@ -15,6 +17,9 @@ window.registerWasmCapability = (namespace, factory) => {
 function createSlotBridge(root) {
 	if (typeof window.__wasm_slot_bridge_factory === 'function') {
 		return window.__wasm_slot_bridge_factory(root);
+	}
+	if (typeof createBudWasmBridge === 'function') {
+		return createBudWasmBridge(root);
 	}
 	return null;
 }
@@ -28,9 +33,12 @@ function createSlotBridge(root) {
  * @returns {Promise<WebAssembly.WebAssemblyInstantiatedSource|null>}
  */
 async function instantiateWasmStreamingWithFallback(url, imports) {
+	const fullUrl = (typeof window !== 'undefined' && window.location?.origin && url.startsWith('/'))
+		? `${window.location.origin}${url}`
+		: url;
 	try {
 		if (typeof WebAssembly.instantiateStreaming === 'function') {
-			const res = await fetch(url);
+			const res = await fetch(fullUrl);
 			if (res.ok) {
 				try {
 					return await WebAssembly.instantiateStreaming(res.clone(), imports);
@@ -44,7 +52,7 @@ async function instantiateWasmStreamingWithFallback(url, imports) {
 		// Fall back to direct arrayBuffer fetch
 	}
 	try {
-		const res = await fetch(url);
+		const res = await fetch(fullUrl);
 		if (res.ok) {
 			const buf = await res.arrayBuffer();
 			return await WebAssembly.instantiate(buf, imports);
@@ -55,7 +63,7 @@ async function instantiateWasmStreamingWithFallback(url, imports) {
 	return null;
 }
 
-class SteleWasmClient {
+export class SteleWasmClient {
 	constructor() {
 		this.instance = null;
 		this.memory = null;
@@ -311,29 +319,120 @@ class SteleWasmClient {
 	attachEventDelegation() {
 		document.addEventListener('click', (evt) => {
 			const actionEl = evt.target.closest('[data-action]');
-			if (!actionEl) return;
+			if (actionEl) {
+				const actionId = parseInt(actionEl.getAttribute('data-action'), 10);
+				const actionData = actionEl.getAttribute('data-action-payload') || '';
+				const slotEl = actionEl.closest('[data-slot]');
+				const slot = slotEl ? parseInt(slotEl.getAttribute('data-slot'), 10) : 0;
 
-			const actionId = parseInt(actionEl.getAttribute('data-action'), 10);
-			const actionData = actionEl.getAttribute('data-action-payload') || '';
-			const slotEl = actionEl.closest('[data-slot]');
-			const slot = slotEl ? parseInt(slotEl.getAttribute('data-slot'), 10) : 0;
+				const comp = this.slotInstances.get(slot);
+				if (comp?.instance?.exports.wasm_action) {
+					const [dataPtr] = this.encodeString(comp.instance, comp.memory, actionData);
+					comp.instance.exports.wasm_action(actionId, dataPtr);
+					if (comp.instance.exports.free) comp.instance.exports.free(dataPtr);
+					this.updateSlot(slot);
+					return;
+				}
 
-			const comp = this.slotInstances.get(slot);
-			if (comp?.instance?.exports.wasm_action) {
-				const [dataPtr] = this.encodeString(comp.instance, comp.memory, actionData);
-				comp.instance.exports.wasm_action(actionId, dataPtr);
-				if (comp.instance.exports.free) comp.instance.exports.free(dataPtr);
-				this.updateSlot(slot);
+				const actionFn = this.instance?.exports.stl_kernel_action || this.instance?.exports.stele_kernel_action;
+				if (actionFn) {
+					const [dataPtr] = this.encodeString(this.instance, this.memory, actionData);
+					actionFn(slot, actionId, dataPtr);
+					if (this.instance.exports.free) this.instance.exports.free(dataPtr);
+				}
 				return;
 			}
 
-			const actionFn = this.instance?.exports.stl_kernel_action || this.instance?.exports.stele_kernel_action;
-			if (actionFn) {
-				const [dataPtr] = this.encodeString(this.instance, this.memory, actionData);
-				actionFn(slot, actionId, dataPtr);
-				if (this.instance.exports.free) this.instance.exports.free(dataPtr);
-			}
+			// Zero-reload warm-memory slot navigation
+			const linkEl = evt.target.closest('a[href]');
+			if (!linkEl) return;
+			if (evt.defaultPrevented || evt.button !== 0 || evt.metaKey || evt.ctrlKey || evt.shiftKey || evt.altKey) return;
+			if (linkEl.target && linkEl.target !== '_self') return;
+			if (linkEl.hasAttribute('download')) return;
+
+			const href = linkEl.getAttribute('href');
+			if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+
+			const targetUrl = new URL(href, window.location.href);
+			if (targetUrl.origin !== window.location.origin) return;
+
+			evt.preventDefault();
+			this.navigate(targetUrl.pathname + targetUrl.search + targetUrl.hash);
 		});
+
+		window.addEventListener('popstate', () => {
+			this.navigate(window.location.pathname + window.location.search + window.location.hash, { pushHistory: false });
+		});
+	}
+
+	async navigate(url, { pushHistory = true } = {}) {
+		try {
+			const res = await fetch(url, {
+				headers: { 'Accept': 'text/html' }
+			});
+			if (!res.ok) {
+				window.location.href = url;
+				return;
+			}
+
+			const html = await res.text();
+			const parser = new DOMParser();
+			const doc = parser.parseFromString(html, 'text/html');
+
+			if (doc.title) {
+				document.title = doc.title;
+			}
+
+			const newModulesAttr = doc.body.getAttribute('data-modules') || '';
+			const newTokens = newModulesAttr.trim().split(/\s+/).filter(Boolean);
+			const newPageModule = newTokens.find(t => t !== 'site_chrome') || doc.querySelector('[data-slot="1"], [data-module]')?.getAttribute('data-module') || '';
+
+			const newStateEl = doc.querySelector('[data-state="1"], #page-state, #bud-state');
+			const newJson = newStateEl?.textContent || '{}';
+
+			const newChromeStateEl = doc.getElementById('chrome-state');
+			if (newChromeStateEl) {
+				const chromeJson = newChromeStateEl.textContent;
+				const chromeComp = this.slotInstances.get(0);
+				if (chromeComp?.instance?.exports.wasm_init) {
+					const [jsonPtr, jsonLen] = this.encodeString(chromeComp.instance, chromeComp.memory, chromeJson);
+					chromeComp.instance.exports.wasm_init(jsonPtr, jsonLen);
+					if (chromeComp.instance.exports.free) chromeComp.instance.exports.free(jsonPtr);
+					this.updateSlot(0);
+				}
+			}
+
+			// Unmount current Slot 1 component
+			const currentComp = this.slotInstances.get(1);
+			if (currentComp?.instance?.exports.wasm_unmount) {
+				currentComp.instance.exports.wasm_unmount(1);
+			}
+
+			// Swap Slot 1 DOM
+			const currentPageRoot = document.querySelector('[data-slot="1"], [data-module], #bud-root');
+			const newPageRoot = doc.querySelector('[data-slot="1"], [data-module], #bud-root');
+			if (currentPageRoot && newPageRoot) {
+				currentPageRoot.innerHTML = newPageRoot.innerHTML;
+				if (newPageModule) currentPageRoot.setAttribute('data-module', newPageModule);
+				const newBridge = createSlotBridge(currentPageRoot);
+				if (newBridge) this.slotBridges.set(1, newBridge);
+			}
+
+			if (newPageModule) {
+				await this.mountSlot(1, newPageModule, newJson);
+			}
+
+			if (pushHistory) {
+				if (typeof history !== 'undefined' && history.pushState) {
+					history.pushState(null, '', url);
+				} else if (typeof window !== 'undefined' && window.history?.pushState) {
+					window.history.pushState(null, '', url);
+				}
+			}
+		} catch (err) {
+			console.warn('[stele-client] SPA navigation failed, falling back to full navigation:', err);
+			window.location.href = url;
+		}
 	}
 }
 
@@ -344,4 +443,15 @@ if (typeof window !== 'undefined') {
 	window.SteleWasmClient = SteleWasmClient;
 	window.steleClient = steleClient;
 	window.stlClient = steleClient;
+
+	if (typeof document !== 'undefined') {
+		const init = () => {
+			steleClient.boot().catch(err => console.error('[stele-client] Boot failed:', err));
+		};
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', init);
+		} else {
+			init();
+		}
+	}
 }
