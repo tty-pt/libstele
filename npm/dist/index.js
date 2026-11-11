@@ -1,10 +1,9 @@
-import { createRequire } from "node:module";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+const _nodeFs = typeof process !== "undefined" && typeof process.getBuiltinModule === "function" ? process.getBuiltinModule("fs") : null;
+const _nodePath = typeof process !== "undefined" && typeof process.getBuiltinModule === "function" ? process.getBuiltinModule("path") : null;
+const _nodeUrl = typeof process !== "undefined" && typeof process.getBuiltinModule === "function" ? process.getBuiltinModule("url") : null;
 
-const __dirname = typeof import.meta !== "undefined" && import.meta.url
-  ? path.dirname(fileURLToPath(import.meta.url))
+const __dirname = typeof import.meta !== "undefined" && import.meta.url && _nodePath && _nodeUrl && _nodeUrl.fileURLToPath
+  ? _nodePath.dirname(_nodeUrl.fileURLToPath(import.meta.url))
   : "";
 
 let nativeBinding = loadNativeAddon(import.meta.url, "stele");
@@ -283,23 +282,23 @@ export function getDefaultImports() {
 }
 
 function resolveSteleWasmPath() {
-  const fileUrlPath = typeof import.meta !== "undefined" && import.meta.url
-    ? fileURLToPath(new URL("./stele.wasm", import.meta.url))
+  const fileUrlPath = typeof import.meta !== "undefined" && import.meta.url && _nodeUrl && _nodeUrl.fileURLToPath
+    ? _nodeUrl.fileURLToPath(new URL("./stele.wasm", import.meta.url))
     : "";
   const candidates = [
     fileUrlPath,
-    path.join(__dirname, "stele.wasm"),
-    path.join(process.cwd(), "node_modules/@tty-pt/stele/dist/stele.wasm"),
-    path.join(process.cwd(), "external/libstele/npm/dist/stele.wasm"),
-    path.join(process.cwd(), "site/external/libstele/npm/dist/stele.wasm")
+    _nodePath ? _nodePath.join(__dirname, "stele.wasm") : "stele.wasm",
+    _nodePath && typeof process !== "undefined" && process.cwd ? _nodePath.join(process.cwd(), "node_modules/@tty-pt/stele/dist/stele.wasm") : "",
+    _nodePath && typeof process !== "undefined" && process.cwd ? _nodePath.join(process.cwd(), "external/libstele/npm/dist/stele.wasm") : "",
+    _nodePath && typeof process !== "undefined" && process.cwd ? _nodePath.join(process.cwd(), "site/external/libstele/npm/dist/stele.wasm") : ""
   ];
   for (const c of candidates) {
     if (!c) continue;
     try {
-      if (fs.existsSync(c)) return c;
+      if (_nodeFs && _nodeFs.existsSync(c)) return c;
     } catch {}
   }
-  return candidates[0] || path.join(__dirname, "stele.wasm");
+  return candidates[0] || (_nodePath ? _nodePath.join(__dirname, "stele.wasm") : "stele.wasm");
 }
 
 /**
@@ -315,8 +314,8 @@ export function getSubstrate() {
   if (typeof process !== "undefined" && process.versions?.node) {
     try {
       const wasmPath = resolveSteleWasmPath();
-      if (fs.existsSync(wasmPath)) {
-        const wasmBuf = fs.readFileSync(wasmPath);
+      if (_nodeFs && _nodeFs.existsSync(wasmPath)) {
+        const wasmBuf = _nodeFs.readFileSync(wasmPath);
         const wasmMod = new WebAssembly.Module(wasmBuf);
         wasmInst = new WebAssembly.Instance(wasmMod, getDefaultImports());
         if (wasmInst.exports._initialize) {

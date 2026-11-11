@@ -1,6 +1,19 @@
 export declare function nowMs(): number;
 export declare function selfRssBytes(): number;
 
+export interface SlotBridge {
+  root: HTMLElement;
+  namespace?: string;
+  makeImports?(): Record<string, Function>;
+  mount?(instance: WebAssembly.Instance, state: any): void;
+  update?(slot: number): void;
+  unmount?(slot: number): void;
+  emitPatch?(op: string, a: string, b: string, c: string): void;
+}
+
+export type SlotBridgeFactory = (root: HTMLElement) => SlotBridge | null;
+
+
 export declare class CapabilityRegistry<T = any> {
   constructor();
   register(name: string, provider: T): this;

@@ -119,6 +119,34 @@ ISO_EXPORT(int, stl_kernel_mount, int slot, const char *name, const char *json, 
     return 0;
 }
 
+ISO_EXPORT(int, stl_kernel_mount_bin, int slot, const char *name, const void *bin, size_t len)
+{
+    if (slot < 0 || slot >= STL_MAX_SLOTS) return -1;
+    const stl_module_ops_t *ops = stl_find_module(name);
+    if (!ops) return -2;
+
+    /* Unmount existing module on this slot */
+    if (g_slots[slot].active) {
+        stl_kernel_unmount(slot);
+    }
+
+    g_slots[slot].ops = ops;
+    g_slots[slot].active = 1;
+    strncpy(g_slots[slot].name, name, sizeof(g_slots[slot].name) - 1);
+    g_slots[slot].name[sizeof(g_slots[slot].name) - 1] = '\0';
+
+    if (ops->init_bin) {
+        ops->init_bin(bin, len);
+    } else if (ops->init) {
+        ops->init((const char *)bin, (int)len);
+    }
+
+    if (ops->mount) {
+        ops->mount(slot);
+    }
+    return 0;
+}
+
 ISO_EXPORT(int, stl_kernel_update, int slot)
 {
     if (slot < 0 || slot >= STL_MAX_SLOTS || !g_slots[slot].active) return -1;

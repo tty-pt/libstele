@@ -1,3 +1,16 @@
+## [Unreleased] (target: v1.6.0)
+
+### Added
+- **Zero-Reload SPA Navigation & Warm-Memory Slot Swapping (`client.js`, `stele-client.js`)**:
+  - Implemented seamless client-side SPA route transitions with warm-memory preservation.
+  - Added event bus implementation (`src/stele_event.c`) for cross-module decoupled messaging.
+  - Added known capability bridges mapping to eliminate redundant 404 network lookups.
+  - Active capability bridge synchronization (`window.__active_bridges`) and batched microtask remounting (`_scheduleBatchRemount`) across patch replay boundaries and slot updates.
+  - Standardized client interface definitions in `include/ttypt/stele_wasm.h`.
+
+### Changed
+- Refactored WASM kernel integration (`src/stele_wasm_kernel.c`) and updated allowed import lists.
+
 ## [1.5.2] - 2026-11-03
 
 - **Universal System Substrate & Single Shared Allocator**:
