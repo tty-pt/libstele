@@ -1,6 +1,6 @@
-<div align="center">
-  <img src="logo.png" alt="libstele logo" width="220" />
-</div>
+<p align="center">
+  <img src="assets/logo.png" alt="libstele logo" width="220" />
+</p>
 
 # libstele
 
@@ -83,12 +83,32 @@ cc server.c $(pkg-config --cflags --libs stele) -o server
 
 ---
 
-## 3. Installation & Packaging
+## 3. Installation & Build
 
+### Prebuilt Packages
 Prebuilt packages for Linux (APT / Alpine / Arch / Fedora-RHEL), macOS (Homebrew), Windows (winget / MSYS2), and OpenBSD are distributed via [tty.pt packages](https://github.com/tty-pt/ci/blob/main/docs/install.md). Use **libstele** as the package name.
 
-```bash
+### Build from Source
+```sh
 make                  # builds lib/libstele.so
 make test             # runs portability & dlopen test suite
 sudo make install     # installs to /usr/local or /usr
 ```
+
+---
+
+## 4. JavaScript & WebAssembly Bindings (`@tty-pt/stele`)
+
+For browser, Node.js, and edge runtimes, `libstele` ships an isomorphic WebAssembly kernel and slot transport runtime on npm:
+
+```sh
+npm install @tty-pt/stele
+```
+
+See [npm/README.md](npm/README.md) for the full TypeScript and WebAssembly API reference.
+
+---
+
+## License
+
+BSD 2-Clause License. Copyright (c) 2026, Paulo André Azevedo Quirino. See `LICENSE`.
