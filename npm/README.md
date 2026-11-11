@@ -5,7 +5,7 @@
 # @tty-pt/stele
 
 [![npm version](https://img.shields.io/npm/v/@tty-pt/stele.svg)](https://www.npmjs.com/package/@tty-pt/stele)
-[![License: BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](LICENSE)
+[![License: BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](../LICENSE)
 [![Standards: WebAssembly Reactor](https://img.shields.io/badge/WASM-Reactor--Substrate-orange.svg)](#)
 
 > Universal Node.js and Browser bindings for **`libstele`**, the zero-dependency system substrate for plain C and isomorphic WebAssembly. Provides high-resolution monotonic clocks, memory diagnostics, and the decoupled `CapabilityRegistry` plug-and-play contract.

@@ -4,8 +4,7 @@
 
 # libstele
 
-[![CI](https://github.com/tty-pt/libstele/actions/workflows/ci.yml/badge.svg)](https://github.com/tty-pt/libstele/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/badge/npm-@tty-pt/stele-CB3837?logo=npm)](npm/README.md)
+[![npm](https://img.shields.io/badge/npm-@tty--pt/stele-CB3837?logo=npm)](npm/README.md)
 [![License: BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](LICENSE)
 [![Standards: ISO C99 / POSIX.1-2008](https://img.shields.io/badge/Standards-C99%20%7C%20POSIX.1--2008-00599C.svg)](#)
 [![Zero-Dependency](https://img.shields.io/badge/Dependencies-Zero-success.svg)](#)
