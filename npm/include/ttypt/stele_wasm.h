@@ -54,7 +54,7 @@ extern "C" {
  * @brief Universal Isomorphic Module Descriptor
  */
 typedef struct stl_module_ops {
-    const char *name;                                   /* e.g. "site_chrome", "song_detail" */
+    const char *name;                                   /* Module identifier (e.g. "app_shell", "item_detail") */
     int (*init)(const char *json, int len);             /* State hydration from SSR JSON */
     int (*init_bin)(const void *bin, size_t len);       /* Zero-copy binary state hydration */
     int (*mount)(int slot);                             /* Mount view in slot */
@@ -118,6 +118,7 @@ typedef stl_module_ops_t stele_module_ops_t;
     }
 
 #define STELE_WASM_MODULE STL_WASM_MODULE
+#define STELE_WASM_MODULE_BIN STL_WASM_MODULE_BIN
 #define STELE_WASM_MODULE_EXT STL_WASM_MODULE_EXT
 
 /* Kernel Lifecycle & Substrate Operations */
@@ -127,9 +128,11 @@ ISO_EXPORT(int, stl_kernel_mount_bin, int slot, const char *name, const void *bi
 ISO_EXPORT(int, stl_kernel_unmount, int slot);
 ISO_EXPORT(int, stl_kernel_update, int slot);
 ISO_EXPORT(int, stl_kernel_action, int slot, int action_id, const char *data);
+ISO_EXPORT(int, stl_kernel_dispatch_event, int slot, unsigned int node_id, const char *event_name, int bubbles, void *event_data);
 ISO_EXPORT(void, stl_kernel_tick, float dt, int width, int height);
 ISO_EXPORT(uint64_t, stl_kernel_version, void);
 ISO_EXPORT(int, stl_kernel_register_module, const stl_module_ops_t *ops);
+ISO_EXPORT(void, wasm_fetch_callback, int request_id, const char *data, int data_len);
 
 /* stele_* aliases */
 ISO_EXPORT_AS(int, stele_kernel_boot, stl_kernel_boot, void);
@@ -138,6 +141,7 @@ ISO_EXPORT_AS(int, stele_kernel_mount_bin, stl_kernel_mount_bin, int slot, const
 ISO_EXPORT_AS(int, stele_kernel_unmount, stl_kernel_unmount, int slot);
 ISO_EXPORT_AS(int, stele_kernel_update, stl_kernel_update, int slot);
 ISO_EXPORT_AS(int, stele_kernel_action, stl_kernel_action, int slot, int action_id, const char *data);
+ISO_EXPORT_AS(int, stele_kernel_dispatch_event, stl_kernel_dispatch_event, int slot, unsigned int node_id, const char *event_name, int bubbles, void *event_data);
 ISO_EXPORT_AS(void, stele_kernel_tick, stl_kernel_tick, float dt, int width, int height);
 ISO_EXPORT_AS(uint64_t, stele_kernel_version, stl_kernel_version, void);
 ISO_EXPORT_AS(int, stele_kernel_register_module, stl_kernel_register_module, const stl_module_ops_t *ops);
@@ -199,9 +203,9 @@ int stl_event_emit(const char *topic, const void *payload, size_t len);
 int stl_event_on(const char *topic, stl_event_fn handler, void *user_data);
 int stl_event_off(const char *topic, stl_event_fn handler);
 
-#define stele_event_emit stl_event_emit
-#define stele_event_on stl_event_on
-#define stele_event_off stl_event_off
+ISO_EXPORT_AS(int, stele_event_emit, stl_event_emit, const char *topic, const void *payload, size_t len);
+ISO_EXPORT_AS(int, stele_event_on, stl_event_on, const char *topic, stl_event_fn handler, void *user_data);
+ISO_EXPORT_AS(int, stele_event_off, stl_event_off, const char *topic, stl_event_fn handler);
 
 /* Exported hooks for event dispatch across WASM instances and host bridges */
 ISO_EXPORT(int, stl_on_event,

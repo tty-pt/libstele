@@ -78,7 +78,8 @@ cc server.c $(pkg-config --cflags --libs stele) -o server
 | **Advisory File Locking** | `<ttypt/stele.h>` | `stl_flock(fd, STL_LOCK_EX \| STL_LOCK_NB)`, `stl_dprintf()`, `stl_ftruncate()` |
 | **Dynamic Loading** | `<ttypt/stele.h>` | `stl_dlopen()`, `stl_dlsym()`, `stl_dlclose()` with `STL_RTLD_NODELETE` |
 | **Isomorphic C Export ABI** | `<ttypt/iso.h>` | `ISO_EXPORT()`, `ISO_EXPORT_AS()`, `ISO_IMPORT()` |
-| **WASM Substrate & Slots** | `<ttypt/stele_wasm.h>` | `stl_kernel_boot()`, `stl_kernel_mount()`, `stl_invalidate()`, `stl_slot_invalidate()` |
+| **WASM Substrate & Slots** | `<ttypt/stele_wasm.h>` | `stl_kernel_boot()`, `stl_kernel_mount()`, `stl_kernel_mount_bin()`, `stl_invalidate()`, `stl_slot_invalidate()`, `STL_WASM_MODULE()`, `STL_WASM_MODULE_BIN()`, `STL_WASM_MODULE_EXT()` |
+| **Cross-Slot Event Bus** | `<ttypt/stele_wasm.h>` | `stl_event_on()`, `stl_event_off()`, `stl_event_emit()`, `stl_on_event()` |
 
 ---
 

@@ -1,15 +1,27 @@
-## [Unreleased] (target: v1.6.0)
+## [1.6.0] - 2026-11-12
 
 ### Added
-- **Zero-Reload SPA Navigation & Warm-Memory Slot Swapping (`client.js`, `stele-client.js`)**:
-  - Implemented seamless client-side SPA route transitions with warm-memory preservation.
-  - Added event bus implementation (`src/stele_event.c`) for cross-module decoupled messaging.
-  - Added known capability bridges mapping to eliminate redundant 404 network lookups.
-  - Active capability bridge synchronization (`window.__active_bridges`) and batched microtask remounting (`_scheduleBatchRemount`) across patch replay boundaries and slot updates.
-  - Standardized client interface definitions in `include/ttypt/stele_wasm.h`.
+- **In-WASM & Cross-Slot Event Bus (`src/stele_event.c`, `<ttypt/stele_wasm.h>`)**:
+  - Added `stl_event_on()`, `stl_event_off()`, `stl_event_emit()`, and `stl_on_event()` (with `stele_*` aliases) to `libstele.so` and `stele.wasm` for decoupled in-instance and cross-slot messaging.
+  - Added `stl_host_event_emit` host import and `SteleWasmClient` event bus methods (`on`, `off`, `emit`) bridging WASM slots and JavaScript listeners.
+- **Zero-Copy Binary State Hydration (`src/stele_wasm_kernel.c`, `<ttypt/stele_wasm.h>`, `client.js`)**:
+  - Added `init_bin` hook to `stl_module_ops_t`, `STL_WASM_MODULE_BIN` registration macro, and `stl_kernel_mount_bin()` / `stele_kernel_mount_bin()` kernel exports.
+  - Added binary state extraction in `SteleWasmClient` supporting `application/octet-stream`, `data-encoding="base64"`, `data-state-bin`, and `meta[name="state-src"]` / `meta[name="page-state-src"]` preloads.
+- **On-Demand Lazy WASM Slot Mounting (`client.js`, `stele-client.js`)**:
+  - Added `lazyMountSlot()` and declarative `[data-lazy-module]` / `[data-lazy-trigger]` hydration supporting `interaction`, `visible` (`IntersectionObserver`), and `manual` triggers.
+- **Optimistic Form Mutations & Automatic Rollback (`client.js`, `stele-client.js`)**:
+  - Added GET filter form delegation and POST optimistic mutation handling (`stl_optimistic_update` / `stl_optimistic_rollback`) with `stl:mutate`, `stl:saved`, and `stl:rollback` lifecycle events.
+- **Zero-Reload SPA Navigation & Batched Capability Remounting (`client.js`, `stele-client.js`)**:
+  - Updated `stl_host_set_location` to use `history.pushState` / `replaceState` for same-origin route transitions while preserving warm WASM memory.
+  - Added active capability bridge synchronization (`window.__active_bridges`) and microtask-batched remounting (`_scheduleBatchRemount`) across DOM patch replay boundaries and slot updates.
+  - Exported `SlotBridge` and `SlotBridgeFactory` TypeScript interfaces and `./client` package subpath in `@tty-pt/stele`.
 
 ### Changed
-- Refactored WASM kernel integration (`src/stele_wasm_kernel.c`) and updated allowed import lists.
+- **Strict Substrate Encapsulation & Packaging Parity**:
+  - Standardized capability script resolution in `stele-client.js` onto the unified `/<thing>-cap.js` convention (`/<cap>-cap.js`, `/<prefix>-cap.js`) with `data-capability-*` / `capabilityUrls` overrides, removing hardcoded downstream library maps.
+  - Removed project-specific addon path references from `loadNativeAddon()` and restored `npm/native/stele_napi.c` for clean Node-API addon compilation.
+  - Synchronized `include/ttypt/*.h` with `npm/include/ttypt/*.h` and `htdocs/stele-client.js` with `npm/dist/client.js` during `make npm-build`.
+  - Added `wasm-allowed-imports.lst` declaring sanctioned `stele.*` and `clipboard.*` host imports.
 
 ## [1.5.2] - 2026-11-03
 

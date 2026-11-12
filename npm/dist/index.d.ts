@@ -29,6 +29,7 @@ export interface WasmSubstrate {
   malloc(size: number): number;
   free(ptr: number): void;
   encodeString(str: string): [number, number];
+  writeBytes(bytes: Uint8Array | ArrayLike<number>): [number, number];
   allocString(str: string): number;
   readString(ptr: number, maxLen?: number): string;
   withString<T>(str: string, fn: (ptr: number) => T): T;
@@ -40,9 +41,13 @@ export interface WasmSubstrate {
   f64(): Float64Array;
   kernelBoot(): number;
   kernelMount(slot: number, name: string, json?: string): number;
+  kernelMountBin(slot: number, name: string, bin: Uint8Array): number;
+  kernelUpdate(slot: number): number;
   kernelAction(slot: number, actionId: number, data?: string): number;
   kernelUnmount(slot: number): number;
   kernelVersion(): number;
+  eventEmit(topic: string, payload?: string | Uint8Array | Record<string, any>): number;
+  onEvent(topic: string, payload?: string | Uint8Array | Record<string, any>): number;
   registerModule(name: string, api: any): this;
   getModule<T = any>(name: string): T | null;
   hasModule(name: string): boolean;

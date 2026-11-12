@@ -89,7 +89,22 @@ ISO_EXPORT(int, stl_event_emit, const char *topic, const void *payload, size_t l
 }
 
 /* stele_* aliases */
-ISO_EXPORT_AS(int, stele_event_on, stl_event_on, const char *topic, stl_event_fn handler, void *user_data);
-ISO_EXPORT_AS(int, stele_event_off, stl_event_off, const char *topic, stl_event_fn handler);
-ISO_EXPORT_AS(int, stele_on_event, stl_on_event, const char *topic, size_t topic_len, const void *payload, size_t payload_len);
-ISO_EXPORT_AS(int, stele_event_emit, stl_event_emit, const char *topic, const void *payload, size_t len);
+ISO_EXPORT(int, stele_event_on, const char *topic, stl_event_fn handler, void *user_data)
+{
+    return stl_event_on(topic, handler, user_data);
+}
+
+ISO_EXPORT(int, stele_event_off, const char *topic, stl_event_fn handler)
+{
+    return stl_event_off(topic, handler);
+}
+
+ISO_EXPORT(int, stele_on_event, const char *topic, size_t topic_len, const void *payload, size_t payload_len)
+{
+    return stl_on_event(topic, topic_len, payload, payload_len);
+}
+
+ISO_EXPORT(int, stele_event_emit, const char *topic, const void *payload, size_t len)
+{
+    return stl_event_emit(topic, payload, len);
+}
