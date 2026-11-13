@@ -1,11 +1,10 @@
-<div align="center">
-  <img src="logo.png" alt="libstele logo" width="220" />
-</div>
+<p align="center">
+  <img src="assets/logo.png" alt="libstele logo" width="220" />
+</p>
 
 # libstele
 
-[![CI](https://github.com/tty-pt/libstele/actions/workflows/ci.yml/badge.svg)](https://github.com/tty-pt/libstele/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/badge/npm-@tty-pt/stele-CB3837?logo=npm)](npm/README.md)
+[![npm](https://img.shields.io/badge/npm-@tty--pt/stele-CB3837?logo=npm)](npm/README.md)
 [![License: BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](LICENSE)
 [![Standards: ISO C99 / POSIX.1-2008](https://img.shields.io/badge/Standards-C99%20%7C%20POSIX.1--2008-00599C.svg)](#)
 [![Zero-Dependency](https://img.shields.io/badge/Dependencies-Zero-success.svg)](#)
@@ -79,16 +78,37 @@ cc server.c $(pkg-config --cflags --libs stele) -o server
 | **Advisory File Locking** | `<ttypt/stele.h>` | `stl_flock(fd, STL_LOCK_EX \| STL_LOCK_NB)`, `stl_dprintf()`, `stl_ftruncate()` |
 | **Dynamic Loading** | `<ttypt/stele.h>` | `stl_dlopen()`, `stl_dlsym()`, `stl_dlclose()` with `STL_RTLD_NODELETE` |
 | **Isomorphic C Export ABI** | `<ttypt/iso.h>` | `ISO_EXPORT()`, `ISO_EXPORT_AS()`, `ISO_IMPORT()` |
-| **WASM Substrate & Slots** | `<ttypt/stele_wasm.h>` | `stl_kernel_boot()`, `stl_kernel_mount()`, `stl_invalidate()`, `stl_slot_invalidate()` |
+| **WASM Substrate & Slots** | `<ttypt/stele_wasm.h>` | `stl_kernel_boot()`, `stl_kernel_mount()`, `stl_kernel_mount_bin()`, `stl_invalidate()`, `stl_slot_invalidate()`, `STL_WASM_MODULE()`, `STL_WASM_MODULE_BIN()`, `STL_WASM_MODULE_EXT()` |
+| **Cross-Slot Event Bus** | `<ttypt/stele_wasm.h>` | `stl_event_on()`, `stl_event_off()`, `stl_event_emit()`, `stl_on_event()` |
 
 ---
 
-## 3. Installation & Packaging
+## 3. Installation & Build
 
+### Prebuilt Packages
 Prebuilt packages for Linux (APT / Alpine / Arch / Fedora-RHEL), macOS (Homebrew), Windows (winget / MSYS2), and OpenBSD are distributed via [tty.pt packages](https://github.com/tty-pt/ci/blob/main/docs/install.md). Use **libstele** as the package name.
 
-```bash
+### Build from Source
+```sh
 make                  # builds lib/libstele.so
 make test             # runs portability & dlopen test suite
 sudo make install     # installs to /usr/local or /usr
 ```
+
+---
+
+## 4. JavaScript & WebAssembly Bindings (`@tty-pt/stele`)
+
+For browser, Node.js, and edge runtimes, `libstele` ships an isomorphic WebAssembly kernel and slot transport runtime on npm:
+
+```sh
+npm install @tty-pt/stele
+```
+
+See [npm/README.md](npm/README.md) for the full TypeScript and WebAssembly API reference.
+
+---
+
+## License
+
+BSD 2-Clause License. Copyright (c) 2026, Paulo André Azevedo Quirino. See `LICENSE`.

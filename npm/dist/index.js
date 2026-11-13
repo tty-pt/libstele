@@ -1,10 +1,9 @@
-import { createRequire } from "node:module";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+const _nodeFs = typeof process !== "undefined" && typeof process.getBuiltinModule === "function" ? process.getBuiltinModule("fs") : null;
+const _nodePath = typeof process !== "undefined" && typeof process.getBuiltinModule === "function" ? process.getBuiltinModule("path") : null;
+const _nodeUrl = typeof process !== "undefined" && typeof process.getBuiltinModule === "function" ? process.getBuiltinModule("url") : null;
 
-const __dirname = typeof import.meta !== "undefined" && import.meta.url
-  ? path.dirname(fileURLToPath(import.meta.url))
+const __dirname = typeof import.meta !== "undefined" && import.meta.url && _nodePath && _nodeUrl && _nodeUrl.fileURLToPath
+  ? _nodePath.dirname(_nodeUrl.fileURLToPath(import.meta.url))
   : "";
 
 let nativeBinding = loadNativeAddon(import.meta.url, "stele");
@@ -174,12 +173,19 @@ export class WasmSubstrate {
   }
 
   encodeString(str) {
-    const bytes = Buffer.from(str, "utf8");
+    const bytes = new TextEncoder().encode(str);
     const ptr = this.malloc(bytes.length + 1);
     const view = new Uint8Array(this.memory.buffer, ptr, bytes.length + 1);
     view.set(bytes);
     view[bytes.length] = 0;
     return [ptr, bytes.length];
+  }
+
+  writeBytes(bytes) {
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    const ptr = this.malloc(u8.length);
+    new Uint8Array(this.memory.buffer, ptr, u8.length).set(u8);
+    return [ptr, u8.length];
   }
 
   kernelBoot() {
@@ -197,6 +203,23 @@ export class WasmSubstrate {
     this.free(namePtr);
     this.free(jsonPtr);
     return res;
+  }
+
+  kernelMountBin(slot, name, bin) {
+    const mountBinFn = this.instance.exports.stl_kernel_mount_bin || this.instance.exports.stele_kernel_mount_bin;
+    if (!mountBinFn) return -1;
+    const [namePtr] = this.encodeString(name);
+    const [binPtr, binLen] = this.writeBytes(bin);
+    const res = mountBinFn(slot, namePtr, binPtr, binLen);
+    this.free(namePtr);
+    this.free(binPtr);
+    return res;
+  }
+
+  kernelUpdate(slot) {
+    const updateFn = this.instance.exports.stl_kernel_update || this.instance.exports.stele_kernel_update;
+    if (updateFn) return updateFn(slot);
+    return 0;
   }
 
   kernelAction(slot, actionId, data = "") {
@@ -218,6 +241,34 @@ export class WasmSubstrate {
     const fn = this.instance.exports.stl_kernel_version || this.instance.exports.stele_kernel_version;
     if (fn) return Number(fn());
     return 2;
+  }
+
+  eventEmit(topic, payload = "") {
+    const emitFn = this.instance.exports.stl_event_emit || this.instance.exports.stele_event_emit;
+    if (!emitFn) return -1;
+    const payloadBytes = typeof payload === "string"
+      ? new TextEncoder().encode(payload)
+      : (payload instanceof Uint8Array ? payload : new TextEncoder().encode(JSON.stringify(payload)));
+    const [topicPtr] = this.encodeString(topic);
+    const [payloadPtr, payloadLen] = payloadBytes.length > 0 ? this.writeBytes(payloadBytes) : [0, 0];
+    const res = emitFn(topicPtr, payloadPtr, payloadLen);
+    this.free(topicPtr);
+    if (payloadPtr) this.free(payloadPtr);
+    return res;
+  }
+
+  onEvent(topic, payload = "") {
+    const onEventFn = this.instance.exports.stl_on_event || this.instance.exports.stele_on_event;
+    if (!onEventFn) return -1;
+    const payloadBytes = typeof payload === "string"
+      ? new TextEncoder().encode(payload)
+      : (payload instanceof Uint8Array ? payload : new TextEncoder().encode(JSON.stringify(payload)));
+    const [topicPtr, topicLen] = this.encodeString(topic);
+    const [payloadPtr, payloadLen] = payloadBytes.length > 0 ? this.writeBytes(payloadBytes) : [0, 0];
+    const res = onEventFn(topicPtr, topicLen, payloadPtr, payloadLen);
+    this.free(topicPtr);
+    if (payloadPtr) this.free(payloadPtr);
+    return res;
   }
 
   registerModule(name, api) {
@@ -245,11 +296,13 @@ export function getDefaultImports() {
     stl_host_fetch: () => {},
     stl_host_set_location: () => {},
     stl_host_invalidate: () => {},
+    stl_host_event_emit: () => {},
     stele_host_emit_patch: () => {},
     stele_host_log: () => {},
     stele_host_fetch: () => {},
     stele_host_set_location: () => {},
     stele_host_invalidate: () => {},
+    stele_host_event_emit: () => {},
   };
   return {
     stele: steleImports,
@@ -283,23 +336,22 @@ export function getDefaultImports() {
 }
 
 function resolveSteleWasmPath() {
-  const fileUrlPath = typeof import.meta !== "undefined" && import.meta.url
-    ? fileURLToPath(new URL("./stele.wasm", import.meta.url))
+  const fileUrlPath = typeof import.meta !== "undefined" && import.meta.url && _nodeUrl && _nodeUrl.fileURLToPath
+    ? _nodeUrl.fileURLToPath(new URL("./stele.wasm", import.meta.url))
     : "";
   const candidates = [
     fileUrlPath,
-    path.join(__dirname, "stele.wasm"),
-    path.join(process.cwd(), "node_modules/@tty-pt/stele/dist/stele.wasm"),
-    path.join(process.cwd(), "external/libstele/npm/dist/stele.wasm"),
-    path.join(process.cwd(), "site/external/libstele/npm/dist/stele.wasm")
+    _nodePath ? _nodePath.join(__dirname, "stele.wasm") : "stele.wasm",
+    _nodePath && typeof process !== "undefined" && process.cwd ? _nodePath.join(process.cwd(), "node_modules/@tty-pt/stele/dist/stele.wasm") : "",
+    _nodePath && typeof process !== "undefined" && process.cwd ? _nodePath.join(process.cwd(), "external/libstele/npm/dist/stele.wasm") : ""
   ];
   for (const c of candidates) {
     if (!c) continue;
     try {
-      if (fs.existsSync(c)) return c;
+      if (_nodeFs && _nodeFs.existsSync(c)) return c;
     } catch {}
   }
-  return candidates[0] || path.join(__dirname, "stele.wasm");
+  return candidates[0] || (_nodePath ? _nodePath.join(__dirname, "stele.wasm") : "stele.wasm");
 }
 
 /**
@@ -315,8 +367,8 @@ export function getSubstrate() {
   if (typeof process !== "undefined" && process.versions?.node) {
     try {
       const wasmPath = resolveSteleWasmPath();
-      if (fs.existsSync(wasmPath)) {
-        const wasmBuf = fs.readFileSync(wasmPath);
+      if (_nodeFs && _nodeFs.existsSync(wasmPath)) {
+        const wasmBuf = _nodeFs.readFileSync(wasmPath);
         const wasmMod = new WebAssembly.Module(wasmBuf);
         wasmInst = new WebAssembly.Instance(wasmMod, getDefaultImports());
         if (wasmInst.exports._initialize) {
@@ -359,7 +411,9 @@ export async function getSubstrateAsync() {
   let wasmBytes = null;
   if (typeof process !== "undefined" && process.versions?.node) {
     const wasmPath = resolveSteleWasmPath();
-    wasmBytes = fs.readFileSync(wasmPath);
+    if (_nodeFs && _nodeFs.existsSync(wasmPath)) {
+      wasmBytes = _nodeFs.readFileSync(wasmPath);
+    }
   } else if (typeof fetch !== "undefined") {
     const res = await fetch(new URL("stele.wasm", import.meta.url));
     wasmBytes = await res.arrayBuffer();
@@ -386,7 +440,7 @@ export async function getSubstrateAsync() {
  * Plug-and-play module loader: Instantiates any downstream WASM module onto
  * the Stele shared-memory substrate with zero consumer boilerplate.
  *
- * @param {URL|string} wasmUrl - URL to the .wasm file (e.g. new URL("./corm.wasm", import.meta.url))
+ * @param {URL|string} wasmUrl - URL to the .wasm file (e.g. new URL("./module.wasm", import.meta.url))
  * @param {object} customImports - Optional module-specific host imports
  * @returns {WebAssembly.Instance}
  */
@@ -394,13 +448,8 @@ export function loadWasmModule(wasmUrl, customImports = {}) {
   const substrate = getSubstrate();
   const sharedMemory = substrate.memory;
 
-  const mergedImports = {
+  const baseImports = {
     wasi_snapshot_preview1: new Proxy({}, { get: () => () => 0 }),
-    xylem: {
-      wasm_xy_load_module: () => 0,
-      wasm_xy_unload_module: () => 0,
-      ...(customImports.xylem || {})
-    },
     env: {
       memory: sharedMemory,
       malloc: (sz) => substrate.malloc(sz),
@@ -410,9 +459,15 @@ export function loadWasmModule(wasmUrl, customImports = {}) {
     },
     ...customImports
   };
-  mergedImports.env.memory = sharedMemory;
-  if (!mergedImports.env.malloc) mergedImports.env.malloc = (sz) => substrate.malloc(sz);
-  if (!mergedImports.env.free) mergedImports.env.free = (ptr) => substrate.free(ptr);
+  baseImports.env.memory = sharedMemory;
+  if (!baseImports.env.malloc) baseImports.env.malloc = (sz) => substrate.malloc(sz);
+  if (!baseImports.env.free) baseImports.env.free = (ptr) => substrate.free(ptr);
+  const mergedImports = new Proxy(baseImports, {
+    get(target, prop) {
+      if (prop in target) return target[prop];
+      return new Proxy({}, { get: () => () => 0 });
+    }
+  });
 
   let wasmBytes = null;
   if (typeof process !== "undefined" && process.versions?.node) {
@@ -464,13 +519,8 @@ export async function loadWasmModuleAsync(wasmUrl, customImports = {}) {
   const substrate = await getSubstrateAsync();
   const sharedMemory = substrate.memory;
 
-  const mergedImports = {
+  const baseImports = {
     wasi_snapshot_preview1: new Proxy({}, { get: () => () => 0 }),
-    xylem: {
-      wasm_xy_load_module: () => 0,
-      wasm_xy_unload_module: () => 0,
-      ...(customImports.xylem || {})
-    },
     env: {
       memory: sharedMemory,
       malloc: (sz) => substrate.malloc(sz),
@@ -480,9 +530,15 @@ export async function loadWasmModuleAsync(wasmUrl, customImports = {}) {
     },
     ...customImports
   };
-  mergedImports.env.memory = sharedMemory;
-  if (!mergedImports.env.malloc) mergedImports.env.malloc = (sz) => substrate.malloc(sz);
-  if (!mergedImports.env.free) mergedImports.env.free = (ptr) => substrate.free(ptr);
+  baseImports.env.memory = sharedMemory;
+  if (!baseImports.env.malloc) baseImports.env.malloc = (sz) => substrate.malloc(sz);
+  if (!baseImports.env.free) baseImports.env.free = (ptr) => substrate.free(ptr);
+  const mergedImports = new Proxy(baseImports, {
+    get(target, prop) {
+      if (prop in target) return target[prop];
+      return new Proxy({}, { get: () => () => 0 });
+    }
+  });
 
   if (typeof fetch !== "undefined") {
     const { instance } = await WebAssembly.instantiateStreaming(fetch(wasmUrl), mergedImports);
@@ -512,7 +568,7 @@ export async function loadWasmModuleAsync(wasmUrl, customImports = {}) {
  * Returns null if running in browser or addon unavailable.
  *
  * @param {string} callerImportMetaUrl - Caller's import.meta.url
- * @param {string} name - Module name (e.g. "corm", "bud", "joint")
+ * @param {string} name - Addon module stem (e.g. "stele", "custom")
  * @returns {object|null}
  */
 export function loadNativeAddon(callerImportMetaUrl, name) {
@@ -531,8 +587,6 @@ export function loadNativeAddon(callerImportMetaUrl, name) {
       `../dist/${name}.node`,
       `../prebuilds/${process.platform}-${process.arch}/${name}.node`,
       `./prebuilds/${process.platform}-${process.arch}/${name}.node`,
-      `../build/Release/duna_${name}.node`,
-      `./duna_${name}.node`,
       `@tty-pt/${name}-${process.platform}-${process.arch}`
     ];
     for (const c of candidates) {
