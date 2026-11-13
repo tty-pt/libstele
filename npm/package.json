@@ -1,6 +1,6 @@
 {
   "name": "@tty-pt/stele",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "type": "module",
   "description": "Universal Node.js and Browser bindings for libstele system substrate and isomorphic C runtime contracts",
   "main": "dist/index.js",

@@ -5,6 +5,6 @@ includedir=${prefix}/include
 
 Name: libstele
 Description: Cross-platform C systems substrate & WebAssembly runtime
-Version: 1.6.0
+Version: 1.6.1
 Libs: -L${libdir} -lstele
 Cflags: -I${includedir}

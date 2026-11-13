@@ -1,3 +1,12 @@
+## [1.6.1] - 2026-11-13
+
+### Changed
+- **Unbounded 4 GB Shared Linear Memory & 2 MB Global Base (`Makefile`, `stele.wasm`, `client.js`, `npm/dist/index.js`)**:
+  - Removed the 256 MB (`max=4096` pages) ceiling on `WebAssembly.Memory` so linear memory starts at 16 MB (`initial=256`) and expands on demand up to the full `wasm32` 4 GB limit for in-browser LLM weights, KV caches, and recall indices.
+  - Placed `stele.wasm` at `--global-base=2097152` (2 MB), reserving `[0 .. 2 MB)` for downstream reactor static data and stack bands while `stele`'s `dlmalloc` heap grows upward from `~2.07 MB` to 4 GB without colliding with guest modules.
+- **Full Single-Allocator Exports (`calloc` & `realloc`)**:
+  - Exported `calloc` and `realloc` alongside `malloc` and `free` from `stele.wasm` and `WasmSubstrate`, injecting all four into `env` in `loadWasmModule` / `loadWasmModuleAsync` so downstream C modules linked with `--wrap` share a single heap.
+
 ## [1.6.0] - 2026-11-12
 
 ### Added
