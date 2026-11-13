@@ -27,6 +27,8 @@ export interface WasmSubstrate {
   readonly memory: WebAssembly.Memory;
   readonly instance: WebAssembly.Instance;
   malloc(size: number): number;
+  calloc(nmemb: number, size: number): number;
+  realloc(ptr: number, size: number): number;
   free(ptr: number): void;
   encodeString(str: string): [number, number];
   writeBytes(bytes: Uint8Array | ArrayLike<number>): [number, number];

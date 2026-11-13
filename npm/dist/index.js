@@ -70,8 +70,8 @@ export class CapabilityRegistry {
 export class WasmSubstrate {
   constructor(instance) {
     this.instance = instance;
-    this.memory = instance.exports.memory || new WebAssembly.Memory({ initial: 256, maximum: 4096 });
-    this._allocOffset = 65536; // Start heap above initial page
+    this.memory = instance.exports.memory || new WebAssembly.Memory({ initial: 256 });
+    this._allocOffset = 2168640; // Start fallback heap above 2 MB static/stack reservation
     this._modules = new Map();
   }
 
@@ -164,6 +164,25 @@ export class WasmSubstrate {
     const ptr = this._allocOffset;
     this._allocOffset += aligned;
     return ptr;
+  }
+
+  calloc(nmemb, size) {
+    if (this.instance.exports.calloc) {
+      return this.instance.exports.calloc(nmemb, size);
+    }
+    const total = nmemb * size;
+    const ptr = this.malloc(total);
+    if (ptr && total > 0) {
+      new Uint8Array(this.memory.buffer, ptr, total).fill(0);
+    }
+    return ptr;
+  }
+
+  realloc(ptr, size) {
+    if (this.instance.exports.realloc) {
+      return this.instance.exports.realloc(ptr, size);
+    }
+    return this.malloc(size);
   }
 
   free(ptr) {
@@ -381,8 +400,8 @@ export function getSubstrate() {
   }
 
   if (!wasmInst) {
-    // Pure in-memory fallback instance
-    const memory = new WebAssembly.Memory({ initial: 256, maximum: 4096 });
+    // Pure in-memory fallback instance (unbounded up to 4 GB wasm32 limit)
+    const memory = new WebAssembly.Memory({ initial: 256 });
     wasmInst = { exports: { memory } };
   }
 
@@ -427,7 +446,7 @@ export async function getSubstrateAsync() {
     }
     wasmInst = instance;
   } else {
-    const memory = new WebAssembly.Memory({ initial: 256, maximum: 4096 });
+    const memory = new WebAssembly.Memory({ initial: 256 });
     wasmInst = { exports: { memory } };
   }
 
@@ -454,6 +473,8 @@ export function loadWasmModule(wasmUrl, customImports = {}) {
       memory: sharedMemory,
       malloc: (sz) => substrate.malloc(sz),
       free: (ptr) => substrate.free(ptr),
+      calloc: (nmemb, sz) => substrate.calloc(nmemb, sz),
+      realloc: (ptr, sz) => substrate.realloc(ptr, sz),
       abort: () => { throw new Error("WASM abort"); },
       ...(customImports.env || {})
     },
@@ -462,6 +483,8 @@ export function loadWasmModule(wasmUrl, customImports = {}) {
   baseImports.env.memory = sharedMemory;
   if (!baseImports.env.malloc) baseImports.env.malloc = (sz) => substrate.malloc(sz);
   if (!baseImports.env.free) baseImports.env.free = (ptr) => substrate.free(ptr);
+  if (!baseImports.env.calloc) baseImports.env.calloc = (nmemb, sz) => substrate.calloc(nmemb, sz);
+  if (!baseImports.env.realloc) baseImports.env.realloc = (ptr, sz) => substrate.realloc(ptr, sz);
   const mergedImports = new Proxy(baseImports, {
     get(target, prop) {
       if (prop in target) return target[prop];
@@ -491,6 +514,8 @@ export function loadWasmModule(wasmUrl, customImports = {}) {
         if (prop in target) return target[prop];
         if (prop === "malloc") return (sz) => substrate.malloc(sz);
         if (prop === "free") return (ptr) => substrate.free(ptr);
+        if (prop === "calloc") return (nmemb, sz) => substrate.calloc(nmemb, sz);
+        if (prop === "realloc") return (ptr, sz) => substrate.realloc(ptr, sz);
         if (prop === "memory") return sharedMemory;
         return undefined;
       }
@@ -525,6 +550,8 @@ export async function loadWasmModuleAsync(wasmUrl, customImports = {}) {
       memory: sharedMemory,
       malloc: (sz) => substrate.malloc(sz),
       free: (ptr) => substrate.free(ptr),
+      calloc: (nmemb, sz) => substrate.calloc(nmemb, sz),
+      realloc: (ptr, sz) => substrate.realloc(ptr, sz),
       abort: () => { throw new Error("WASM abort"); },
       ...(customImports.env || {})
     },
@@ -533,6 +560,8 @@ export async function loadWasmModuleAsync(wasmUrl, customImports = {}) {
   baseImports.env.memory = sharedMemory;
   if (!baseImports.env.malloc) baseImports.env.malloc = (sz) => substrate.malloc(sz);
   if (!baseImports.env.free) baseImports.env.free = (ptr) => substrate.free(ptr);
+  if (!baseImports.env.calloc) baseImports.env.calloc = (nmemb, sz) => substrate.calloc(nmemb, sz);
+  if (!baseImports.env.realloc) baseImports.env.realloc = (ptr, sz) => substrate.realloc(ptr, sz);
   const mergedImports = new Proxy(baseImports, {
     get(target, prop) {
       if (prop in target) return target[prop];
@@ -547,6 +576,8 @@ export async function loadWasmModuleAsync(wasmUrl, customImports = {}) {
         if (prop in target) return target[prop];
         if (prop === "malloc") return (sz) => substrate.malloc(sz);
         if (prop === "free") return (ptr) => substrate.free(ptr);
+        if (prop === "calloc") return (nmemb, sz) => substrate.calloc(nmemb, sz);
+        if (prop === "realloc") return (ptr, sz) => substrate.realloc(ptr, sz);
         if (prop === "memory") return sharedMemory;
         return undefined;
       }

@@ -14,7 +14,6 @@ LDLIBS-stele_port_test := -lstele
 LDLIBS-stele_port_test-Windows := -lws2_32 -lpsapi
 
 WASM_SRCS := src/stele_wasm_kernel.c src/stele_event.c
-WASM_LDFLAGS := -mexec-model=reactor -Wl,--gc-sections -Wl,--no-entry -Wl,--allow-undefined -Wl,--export=malloc -Wl,--export=free -Wl,--initial-memory=16777216 -Wl,--max-memory=268435456
 
 include ../mk/include.mk
 
