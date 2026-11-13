@@ -130,6 +130,7 @@ ISO_EXPORT(int, stl_kernel_update, int slot);
 ISO_EXPORT(int, stl_kernel_action, int slot, int action_id, const char *data);
 ISO_EXPORT(int, stl_kernel_dispatch_event, int slot, unsigned int node_id, const char *event_name, int bubbles, void *event_data);
 ISO_EXPORT(void, stl_kernel_tick, float dt, int width, int height);
+ISO_EXPORT(int, stl_kernel_has_tick, void);
 ISO_EXPORT(uint64_t, stl_kernel_version, void);
 ISO_EXPORT(int, stl_kernel_register_module, const stl_module_ops_t *ops);
 ISO_EXPORT(void, wasm_fetch_callback, int request_id, const char *data, int data_len);
@@ -143,6 +144,7 @@ ISO_EXPORT_AS(int, stele_kernel_update, stl_kernel_update, int slot);
 ISO_EXPORT_AS(int, stele_kernel_action, stl_kernel_action, int slot, int action_id, const char *data);
 ISO_EXPORT_AS(int, stele_kernel_dispatch_event, stl_kernel_dispatch_event, int slot, unsigned int node_id, const char *event_name, int bubbles, void *event_data);
 ISO_EXPORT_AS(void, stele_kernel_tick, stl_kernel_tick, float dt, int width, int height);
+ISO_EXPORT_AS(int, stele_kernel_has_tick, stl_kernel_has_tick, void);
 ISO_EXPORT_AS(uint64_t, stele_kernel_version, stl_kernel_version, void);
 ISO_EXPORT_AS(int, stele_kernel_register_module, stl_kernel_register_module, const stl_module_ops_t *ops);
 

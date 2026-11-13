@@ -76,13 +76,15 @@ static const stl_module_ops_t *stl_find_module(const char *name)
             }
         }
     }
+    if (g_registered_count == 1) {
+        return g_registered[0];
+    }
     return NULL;
 }
 
 ISO_EXPORT(int, stl_kernel_boot, void)
 {
     memset(g_slots, 0, sizeof(g_slots));
-    g_registered_count = 0;
 
     /* Enumerate static modules if present */
     if (g_stl_modules) {
@@ -204,6 +206,16 @@ ISO_EXPORT(void, stl_kernel_tick, float dt, int width, int height)
     }
 }
 
+ISO_EXPORT(int, stl_kernel_has_tick, void)
+{
+    for (int i = 0; i < STL_MAX_SLOTS; i++) {
+        if (g_slots[i].active && g_slots[i].ops && g_slots[i].ops->tick) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 ISO_EXPORT(void, wasm_fetch_callback, int request_id, const char *data, int data_len)
 {
     for (int i = 0; i < STL_MAX_SLOTS; i++) {
@@ -237,6 +249,7 @@ ISO_EXPORT(int, stele_kernel_dispatch_event, int slot, unsigned int node_id, con
 ISO_EXPORT(void, stele_kernel_tick, float dt, int width, int height) {
     stl_kernel_tick(dt, width, height);
 }
+ISO_EXPORT(int, stele_kernel_has_tick, void) { return stl_kernel_has_tick(); }
 ISO_EXPORT(uint64_t, stele_kernel_version, void) { return stl_kernel_version(); }
 ISO_EXPORT(int, stele_kernel_register_module, const stl_module_ops_t *ops) {
     return stl_kernel_register_module(ops);
