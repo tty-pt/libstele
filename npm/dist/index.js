@@ -655,6 +655,13 @@ export function loadNativeAddon(callerImportMetaUrl, name) {
     const getModule = globalThis.process?.getBuiltinModule;
     const req = getModule ? getModule("module").createRequire(callerImportMetaUrl) : null;
     if (!req) return null;
+    const os = getModule ? getModule("os") : null;
+    const dlopenFlags =
+      os?.constants?.dlopen &&
+      typeof os.constants.dlopen.RTLD_NOW === "number" &&
+      typeof os.constants.dlopen.RTLD_GLOBAL === "number"
+        ? os.constants.dlopen.RTLD_NOW | os.constants.dlopen.RTLD_GLOBAL
+        : undefined;
 
     const keys = getPlatformPrebuildKeys();
     const candidates = [
@@ -674,6 +681,16 @@ export function loadNativeAddon(callerImportMetaUrl, name) {
     }
     for (const c of candidates) {
       try {
+        if (dlopenFlags !== undefined && typeof process.dlopen === "function") {
+          const resolved = req.resolve(c);
+          if (resolved && resolved.endsWith(".node")) {
+            const mod = { exports: {} };
+            process.dlopen(mod, resolved, dlopenFlags);
+            if (mod.exports && Object.keys(mod.exports).length > 0) {
+              return mod.exports;
+            }
+          }
+        }
         const mod = req(c);
         if (mod) return mod;
       } catch {}
@@ -699,8 +716,16 @@ export function resolveAxisPrebuildDirs(
   }
   const found = [];
   const seen = new Set();
-  const addDir = (d, fs) => {
-    if (d && !seen.has(d) && fs.existsSync(d)) {
+  const hasAxisLib = (d, axis, fs, path) => {
+    if (!d || !fs.existsSync(d)) return false;
+    return (
+      fs.existsSync(path.join(d, `lib${axis}.so`)) ||
+      fs.existsSync(path.join(d, `lib${axis}.dylib`)) ||
+      fs.existsSync(path.join(d, `lib${axis}.dll`))
+    );
+  };
+  const addDir = (d, axis, fs, path) => {
+    if (d && !seen.has(d) && hasAxisLib(d, axis, fs, path)) {
       seen.add(d);
       found.push(d);
     }
@@ -721,19 +746,26 @@ export function resolveAxisPrebuildDirs(
         const pkgJson = req.resolve(`@tty-pt/${axis}/package.json`);
         const pkgRoot = path.dirname(pkgJson);
         for (const key of keys) {
-          addDir(path.join(pkgRoot, "prebuilds", key), fs);
+          addDir(path.join(pkgRoot, "prebuilds", key), axis, fs, path);
         }
-        addDir(path.join(pkgRoot, "build", "Release"), fs);
-        addDir(path.resolve(pkgRoot, "..", "lib"), fs);
+        addDir(path.join(pkgRoot, "build", "Release"), axis, fs, path);
+        addDir(path.resolve(pkgRoot, "..", "lib"), axis, fs, path);
       } catch {}
 
-      // 2. Check sibling external/lib<axis> layout relative to callerDir (e.g. external/libcorm/npm/dist)
-      const siblingRepo = path.resolve(callerDir, "..", "..", "..", `lib${axis}`);
-      addDir(path.join(siblingRepo, "lib"), fs);
+      // 2. Check sibling @tty-pt/<axis> in node_modules relative to callerDir
+      const siblingPkgRoot = path.resolve(callerDir, "..", "..", axis);
       for (const key of keys) {
-        addDir(path.join(siblingRepo, "npm", "prebuilds", key), fs);
+        addDir(path.join(siblingPkgRoot, "prebuilds", key), axis, fs, path);
       }
-      addDir(path.join(siblingRepo, "npm", "build", "Release"), fs);
+      addDir(path.join(siblingPkgRoot, "build", "Release"), axis, fs, path);
+
+      // 3. Check sibling external/lib<axis> layout relative to callerDir (e.g. external/libcorm/npm/dist)
+      const siblingRepo = path.resolve(callerDir, "..", "..", "..", `lib${axis}`);
+      addDir(path.join(siblingRepo, "lib"), axis, fs, path);
+      for (const key of keys) {
+        addDir(path.join(siblingRepo, "npm", "prebuilds", key), axis, fs, path);
+      }
+      addDir(path.join(siblingRepo, "npm", "build", "Release"), axis, fs, path);
     }
   } catch {}
   return found;

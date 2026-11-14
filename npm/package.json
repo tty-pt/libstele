@@ -16,6 +16,7 @@
   },
   "files": [
     "dist",
+    "prebuilds",
     "include",
     "assets",
     "*.pc",
