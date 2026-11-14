@@ -594,6 +594,51 @@ export async function loadWasmModuleAsync(wasmUrl, customImports = {}) {
 }
 
 /**
+ * Detects whether the current Linux host uses musl libc rather than glibc.
+ * @returns {boolean}
+ */
+export function isMuslLinux() {
+  if (typeof process === "undefined" || process.platform !== "linux") {
+    return false;
+  }
+  try {
+    const getModule = globalThis.process?.getBuiltinModule;
+    const fs = getModule ? getModule("fs") : null;
+    if (fs?.existsSync) {
+      if (
+        fs.existsSync("/etc/alpine-release") ||
+        fs.existsSync(`/lib/ld-musl-${process.arch}.so.1`) ||
+        fs.existsSync("/lib/ld-musl-x86_64.so.1") ||
+        fs.existsSync("/lib/ld-musl-aarch64.so.1")
+      ) {
+        return true;
+      }
+    }
+    const rep = process.report?.getReport?.();
+    if (rep && typeof rep === "object") {
+      const header = rep.header || (typeof rep === "string" ? JSON.parse(rep).header : null);
+      if (header && !header.glibcVersionRuntime) {
+        return true;
+      }
+    }
+  } catch {}
+  return false;
+}
+
+/**
+ * Returns candidate `<os>-<cpu>[-musl]` prebuild directory keys in priority order.
+ * @returns {string[]}
+ */
+export function getPlatformPrebuildKeys() {
+  if (typeof process === "undefined") return [];
+  const base = `${process.platform}-${process.arch}`;
+  if (isMuslLinux()) {
+    return [`${base}-musl`, base];
+  }
+  return [base];
+}
+
+/**
  * Universal Node-API native addon discoverer.
  * Automatically checks local build, installed package, and project cwd paths.
  * Returns null if running in browser or addon unavailable.
@@ -611,15 +656,22 @@ export function loadNativeAddon(callerImportMetaUrl, name) {
     const req = getModule ? getModule("module").createRequire(callerImportMetaUrl) : null;
     if (!req) return null;
 
+    const keys = getPlatformPrebuildKeys();
     const candidates = [
       `../build/Release/${name}_node.node`,
       `./${name}_node.node`,
       `./${name}.node`,
       `../dist/${name}.node`,
-      `../prebuilds/${process.platform}-${process.arch}/${name}.node`,
-      `./prebuilds/${process.platform}-${process.arch}/${name}.node`,
-      `@tty-pt/${name}-${process.platform}-${process.arch}`
     ];
+    for (const key of keys) {
+      candidates.push(
+        `../prebuilds/${key}/${name}.node`,
+        `./prebuilds/${key}/${name}.node`,
+        `../prebuilds/${key}/${name}_node.node`,
+        `./prebuilds/${key}/${name}_node.node`,
+        `@tty-pt/${name}-${key}`
+      );
+    }
     for (const c of candidates) {
       try {
         const mod = req(c);
@@ -629,3 +681,61 @@ export function loadNativeAddon(callerImportMetaUrl, name) {
   } catch {}
   return null;
 }
+
+/**
+ * Resolves directories containing native shared libraries (`lib<axis>.so` / `.dylib` / `.dll`)
+ * across installed `@tty-pt/<axis>` packages and local sibling source checkouts.
+ *
+ * @param {string} callerImportMetaUrl - Caller's import.meta.url
+ * @param {string[]} [axisNames] - Axis short names (default: ["joint", "lemma", "sepal", "islet"])
+ * @returns {string[]} Deduplicated list of existing directory paths
+ */
+export function resolveAxisPrebuildDirs(
+  callerImportMetaUrl,
+  axisNames = ["joint", "lemma", "sepal", "islet"]
+) {
+  if (typeof process === "undefined" || !process.versions?.node) {
+    return [];
+  }
+  const found = [];
+  const seen = new Set();
+  const addDir = (d, fs) => {
+    if (d && !seen.has(d) && fs.existsSync(d)) {
+      seen.add(d);
+      found.push(d);
+    }
+  };
+  try {
+    const getModule = globalThis.process?.getBuiltinModule;
+    if (!getModule) return [];
+    const fs = getModule("fs");
+    const path = getModule("path");
+    const url = getModule("url");
+    const req = getModule("module").createRequire(callerImportMetaUrl);
+    const callerDir = path.dirname(url.fileURLToPath(callerImportMetaUrl));
+    const keys = getPlatformPrebuildKeys();
+
+    for (const axis of axisNames) {
+      // 1. Check installed @tty-pt/<axis> via require.resolve
+      try {
+        const pkgJson = req.resolve(`@tty-pt/${axis}/package.json`);
+        const pkgRoot = path.dirname(pkgJson);
+        for (const key of keys) {
+          addDir(path.join(pkgRoot, "prebuilds", key), fs);
+        }
+        addDir(path.join(pkgRoot, "build", "Release"), fs);
+        addDir(path.resolve(pkgRoot, "..", "lib"), fs);
+      } catch {}
+
+      // 2. Check sibling external/lib<axis> layout relative to callerDir (e.g. external/libcorm/npm/dist)
+      const siblingRepo = path.resolve(callerDir, "..", "..", "..", `lib${axis}`);
+      addDir(path.join(siblingRepo, "lib"), fs);
+      for (const key of keys) {
+        addDir(path.join(siblingRepo, "npm", "prebuilds", key), fs);
+      }
+      addDir(path.join(siblingRepo, "npm", "build", "Release"), fs);
+    }
+  } catch {}
+  return found;
+}
+

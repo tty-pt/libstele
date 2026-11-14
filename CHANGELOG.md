@@ -1,3 +1,10 @@
+## [1.7.0] - 2026-11-14
+
+### Added
+- **Musl Linux Detection & Prebuild Axis Discovery (`npm/dist/index.js`, `npm/dist/index.d.ts`)**:
+  - Added `isMuslLinux()` and `getPlatformPrebuildKeys()` to detect Alpine/musl hosts (`linux-<arch>-musl` with fallback to `linux-<arch>`) during native Node-API addon loading.
+  - Added `resolveAxisPrebuildDirs()` to automatically discover sibling `@tty-pt/{lemma,sepal,joint,islet}` shared library directories across `prebuilds/<platform-arch>`, `build/Release`, and local `lib` paths.
+
 ## [1.6.1] - 2026-11-13
 
 ### Changed

@@ -62,4 +62,8 @@ export declare function getSharedWasm(): any;
 
 export declare function loadWasmModule(wasmUrl: URL | string, customImports?: Record<string, any>): WebAssembly.Instance;
 export declare function loadWasmModuleAsync(wasmUrl: URL | string, customImports?: Record<string, any>): Promise<WebAssembly.Instance>;
+export declare function isMuslLinux(): boolean;
+export declare function getPlatformPrebuildKeys(): string[];
 export declare function loadNativeAddon<T = any>(callerImportMetaUrl: string, name: string): T | null;
+export declare function resolveAxisPrebuildDirs(callerImportMetaUrl: string, axisNames?: string[]): string[];
+
