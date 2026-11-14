@@ -1,3 +1,11 @@
+## [1.7.1] - 2026-11-14
+
+### Fixed
+- **Global Symbol Visibility (`RTLD_GLOBAL`) & Hoisted Axis Prebuild Validation (`npm/dist/index.js`, `npm/package.json`)**:
+  - Updated `loadNativeAddon()` to load `.node` addons via `process.dlopen(..., RTLD_NOW | RTLD_GLOBAL)` before falling back to `require()`, ensuring `corm_*` and `stl_*` symbols are globally visible when `libcorm` dynamically opens axis shared libraries.
+  - Updated `resolveAxisPrebuildDirs()` to verify that `lib<axis>.{so,dylib,dll}` exists in candidate directories and added hoisted `../../<axis>/prebuilds/<key>` lookup.
+  - Included `"prebuilds"` in `npm/package.json` `"files"`.
+
 ## [1.7.0] - 2026-11-14
 
 ### Added
