@@ -1,3 +1,52 @@
+## [1.7.1] - 2026-11-14
+
+### Fixed
+- **Global Symbol Visibility (`RTLD_GLOBAL`) & Hoisted Axis Prebuild Validation (`npm/dist/index.js`, `npm/package.json`)**:
+  - Updated `loadNativeAddon()` to load `.node` addons via `process.dlopen(..., RTLD_NOW | RTLD_GLOBAL)` before falling back to `require()`, ensuring `corm_*` and `stl_*` symbols are globally visible when `libcorm` dynamically opens axis shared libraries.
+  - Updated `resolveAxisPrebuildDirs()` to verify that `lib<axis>.{so,dylib,dll}` exists in candidate directories and added hoisted `../../<axis>/prebuilds/<key>` lookup.
+  - Included `"prebuilds"` in `npm/package.json` `"files"`.
+
+## [1.7.0] - 2026-11-14
+
+### Added
+- **Musl Linux Detection & Prebuild Axis Discovery (`npm/dist/index.js`, `npm/dist/index.d.ts`)**:
+  - Added `isMuslLinux()` and `getPlatformPrebuildKeys()` to detect Alpine/musl hosts (`linux-<arch>-musl` with fallback to `linux-<arch>`) during native Node-API addon loading.
+  - Added `resolveAxisPrebuildDirs()` to automatically discover sibling `@tty-pt/{lemma,sepal,joint,islet}` shared library directories across `prebuilds/<platform-arch>`, `build/Release`, and local `lib` paths.
+
+## [1.6.1] - 2026-11-13
+
+### Changed
+- **Unbounded 4 GB Shared Linear Memory & 2 MB Global Base (`Makefile`, `stele.wasm`, `client.js`, `npm/dist/index.js`)**:
+  - Removed the 256 MB (`max=4096` pages) ceiling on `WebAssembly.Memory` so linear memory starts at 16 MB (`initial=256`) and expands on demand up to the full `wasm32` 4 GB limit for in-browser LLM weights, KV caches, and recall indices.
+  - Placed `stele.wasm` at `--global-base=2097152` (2 MB), reserving `[0 .. 2 MB)` for downstream reactor static data and stack bands while `stele`'s `dlmalloc` heap grows upward from `~2.07 MB` to 4 GB without colliding with guest modules.
+- **Full Single-Allocator Exports (`calloc` & `realloc`)**:
+  - Exported `calloc` and `realloc` alongside `malloc` and `free` from `stele.wasm` and `WasmSubstrate`, injecting all four into `env` in `loadWasmModule` / `loadWasmModuleAsync` so downstream C modules linked with `--wrap` share a single heap.
+
+## [1.6.0] - 2026-11-12
+
+### Added
+- **In-WASM & Cross-Slot Event Bus (`src/stele_event.c`, `<ttypt/stele_wasm.h>`)**:
+  - Added `stl_event_on()`, `stl_event_off()`, `stl_event_emit()`, and `stl_on_event()` (with `stele_*` aliases) to `libstele.so` and `stele.wasm` for decoupled in-instance and cross-slot messaging.
+  - Added `stl_host_event_emit` host import and `SteleWasmClient` event bus methods (`on`, `off`, `emit`) bridging WASM slots and JavaScript listeners.
+- **Zero-Copy Binary State Hydration (`src/stele_wasm_kernel.c`, `<ttypt/stele_wasm.h>`, `client.js`)**:
+  - Added `init_bin` hook to `stl_module_ops_t`, `STL_WASM_MODULE_BIN` registration macro, and `stl_kernel_mount_bin()` / `stele_kernel_mount_bin()` kernel exports.
+  - Added binary state extraction in `SteleWasmClient` supporting `application/octet-stream`, `data-encoding="base64"`, `data-state-bin`, and `meta[name="state-src"]` / `meta[name="page-state-src"]` preloads.
+- **On-Demand Lazy WASM Slot Mounting (`client.js`, `stele-client.js`)**:
+  - Added `lazyMountSlot()` and declarative `[data-lazy-module]` / `[data-lazy-trigger]` hydration supporting `interaction`, `visible` (`IntersectionObserver`), and `manual` triggers.
+- **Optimistic Form Mutations & Automatic Rollback (`client.js`, `stele-client.js`)**:
+  - Added GET filter form delegation and POST optimistic mutation handling (`stl_optimistic_update` / `stl_optimistic_rollback`) with `stl:mutate`, `stl:saved`, and `stl:rollback` lifecycle events.
+- **Zero-Reload SPA Navigation & Batched Capability Remounting (`client.js`, `stele-client.js`)**:
+  - Updated `stl_host_set_location` to use `history.pushState` / `replaceState` for same-origin route transitions while preserving warm WASM memory.
+  - Added active capability bridge synchronization (`window.__active_bridges`) and microtask-batched remounting (`_scheduleBatchRemount`) across DOM patch replay boundaries and slot updates.
+  - Exported `SlotBridge` and `SlotBridgeFactory` TypeScript interfaces and `./client` package subpath in `@tty-pt/stele`.
+
+### Changed
+- **Strict Substrate Encapsulation & Packaging Parity**:
+  - Standardized capability script resolution in `stele-client.js` onto the unified `/<thing>-cap.js` convention (`/<cap>-cap.js`, `/<prefix>-cap.js`) with `data-capability-*` / `capabilityUrls` overrides, removing hardcoded downstream library maps.
+  - Removed project-specific addon path references from `loadNativeAddon()` and restored `npm/native/stele_napi.c` for clean Node-API addon compilation.
+  - Synchronized `include/ttypt/*.h` with `npm/include/ttypt/*.h` and `htdocs/stele-client.js` with `npm/dist/client.js` during `make npm-build`.
+  - Added `wasm-allowed-imports.lst` declaring sanctioned `stele.*` and `clipboard.*` host imports.
+
 ## [1.5.2] - 2026-11-03
 
 - **Universal System Substrate & Single Shared Allocator**:

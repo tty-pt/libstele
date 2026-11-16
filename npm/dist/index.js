@@ -1,10 +1,9 @@
-import { createRequire } from "node:module";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+const _nodeFs = typeof process !== "undefined" && typeof process.getBuiltinModule === "function" ? process.getBuiltinModule("fs") : null;
+const _nodePath = typeof process !== "undefined" && typeof process.getBuiltinModule === "function" ? process.getBuiltinModule("path") : null;
+const _nodeUrl = typeof process !== "undefined" && typeof process.getBuiltinModule === "function" ? process.getBuiltinModule("url") : null;
 
-const __dirname = typeof import.meta !== "undefined" && import.meta.url
-  ? path.dirname(fileURLToPath(import.meta.url))
+const __dirname = typeof import.meta !== "undefined" && import.meta.url && _nodePath && _nodeUrl && _nodeUrl.fileURLToPath
+  ? _nodePath.dirname(_nodeUrl.fileURLToPath(import.meta.url))
   : "";
 
 let nativeBinding = loadNativeAddon(import.meta.url, "stele");
@@ -71,8 +70,8 @@ export class CapabilityRegistry {
 export class WasmSubstrate {
   constructor(instance) {
     this.instance = instance;
-    this.memory = instance.exports.memory || new WebAssembly.Memory({ initial: 256, maximum: 4096 });
-    this._allocOffset = 65536; // Start heap above initial page
+    this.memory = instance.exports.memory || new WebAssembly.Memory({ initial: 256 });
+    this._allocOffset = 2168640; // Start fallback heap above 2 MB static/stack reservation
     this._modules = new Map();
   }
 
@@ -167,6 +166,25 @@ export class WasmSubstrate {
     return ptr;
   }
 
+  calloc(nmemb, size) {
+    if (this.instance.exports.calloc) {
+      return this.instance.exports.calloc(nmemb, size);
+    }
+    const total = nmemb * size;
+    const ptr = this.malloc(total);
+    if (ptr && total > 0) {
+      new Uint8Array(this.memory.buffer, ptr, total).fill(0);
+    }
+    return ptr;
+  }
+
+  realloc(ptr, size) {
+    if (this.instance.exports.realloc) {
+      return this.instance.exports.realloc(ptr, size);
+    }
+    return this.malloc(size);
+  }
+
   free(ptr) {
     if (this.instance.exports.free) {
       this.instance.exports.free(ptr);
@@ -174,12 +192,19 @@ export class WasmSubstrate {
   }
 
   encodeString(str) {
-    const bytes = Buffer.from(str, "utf8");
+    const bytes = new TextEncoder().encode(str);
     const ptr = this.malloc(bytes.length + 1);
     const view = new Uint8Array(this.memory.buffer, ptr, bytes.length + 1);
     view.set(bytes);
     view[bytes.length] = 0;
     return [ptr, bytes.length];
+  }
+
+  writeBytes(bytes) {
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    const ptr = this.malloc(u8.length);
+    new Uint8Array(this.memory.buffer, ptr, u8.length).set(u8);
+    return [ptr, u8.length];
   }
 
   kernelBoot() {
@@ -197,6 +222,23 @@ export class WasmSubstrate {
     this.free(namePtr);
     this.free(jsonPtr);
     return res;
+  }
+
+  kernelMountBin(slot, name, bin) {
+    const mountBinFn = this.instance.exports.stl_kernel_mount_bin || this.instance.exports.stele_kernel_mount_bin;
+    if (!mountBinFn) return -1;
+    const [namePtr] = this.encodeString(name);
+    const [binPtr, binLen] = this.writeBytes(bin);
+    const res = mountBinFn(slot, namePtr, binPtr, binLen);
+    this.free(namePtr);
+    this.free(binPtr);
+    return res;
+  }
+
+  kernelUpdate(slot) {
+    const updateFn = this.instance.exports.stl_kernel_update || this.instance.exports.stele_kernel_update;
+    if (updateFn) return updateFn(slot);
+    return 0;
   }
 
   kernelAction(slot, actionId, data = "") {
@@ -218,6 +260,34 @@ export class WasmSubstrate {
     const fn = this.instance.exports.stl_kernel_version || this.instance.exports.stele_kernel_version;
     if (fn) return Number(fn());
     return 2;
+  }
+
+  eventEmit(topic, payload = "") {
+    const emitFn = this.instance.exports.stl_event_emit || this.instance.exports.stele_event_emit;
+    if (!emitFn) return -1;
+    const payloadBytes = typeof payload === "string"
+      ? new TextEncoder().encode(payload)
+      : (payload instanceof Uint8Array ? payload : new TextEncoder().encode(JSON.stringify(payload)));
+    const [topicPtr] = this.encodeString(topic);
+    const [payloadPtr, payloadLen] = payloadBytes.length > 0 ? this.writeBytes(payloadBytes) : [0, 0];
+    const res = emitFn(topicPtr, payloadPtr, payloadLen);
+    this.free(topicPtr);
+    if (payloadPtr) this.free(payloadPtr);
+    return res;
+  }
+
+  onEvent(topic, payload = "") {
+    const onEventFn = this.instance.exports.stl_on_event || this.instance.exports.stele_on_event;
+    if (!onEventFn) return -1;
+    const payloadBytes = typeof payload === "string"
+      ? new TextEncoder().encode(payload)
+      : (payload instanceof Uint8Array ? payload : new TextEncoder().encode(JSON.stringify(payload)));
+    const [topicPtr, topicLen] = this.encodeString(topic);
+    const [payloadPtr, payloadLen] = payloadBytes.length > 0 ? this.writeBytes(payloadBytes) : [0, 0];
+    const res = onEventFn(topicPtr, topicLen, payloadPtr, payloadLen);
+    this.free(topicPtr);
+    if (payloadPtr) this.free(payloadPtr);
+    return res;
   }
 
   registerModule(name, api) {
@@ -245,11 +315,13 @@ export function getDefaultImports() {
     stl_host_fetch: () => {},
     stl_host_set_location: () => {},
     stl_host_invalidate: () => {},
+    stl_host_event_emit: () => {},
     stele_host_emit_patch: () => {},
     stele_host_log: () => {},
     stele_host_fetch: () => {},
     stele_host_set_location: () => {},
     stele_host_invalidate: () => {},
+    stele_host_event_emit: () => {},
   };
   return {
     stele: steleImports,
@@ -283,23 +355,22 @@ export function getDefaultImports() {
 }
 
 function resolveSteleWasmPath() {
-  const fileUrlPath = typeof import.meta !== "undefined" && import.meta.url
-    ? fileURLToPath(new URL("./stele.wasm", import.meta.url))
+  const fileUrlPath = typeof import.meta !== "undefined" && import.meta.url && _nodeUrl && _nodeUrl.fileURLToPath
+    ? _nodeUrl.fileURLToPath(new URL("./stele.wasm", import.meta.url))
     : "";
   const candidates = [
     fileUrlPath,
-    path.join(__dirname, "stele.wasm"),
-    path.join(process.cwd(), "node_modules/@tty-pt/stele/dist/stele.wasm"),
-    path.join(process.cwd(), "external/libstele/npm/dist/stele.wasm"),
-    path.join(process.cwd(), "site/external/libstele/npm/dist/stele.wasm")
+    _nodePath ? _nodePath.join(__dirname, "stele.wasm") : "stele.wasm",
+    _nodePath && typeof process !== "undefined" && process.cwd ? _nodePath.join(process.cwd(), "node_modules/@tty-pt/stele/dist/stele.wasm") : "",
+    _nodePath && typeof process !== "undefined" && process.cwd ? _nodePath.join(process.cwd(), "external/libstele/npm/dist/stele.wasm") : ""
   ];
   for (const c of candidates) {
     if (!c) continue;
     try {
-      if (fs.existsSync(c)) return c;
+      if (_nodeFs && _nodeFs.existsSync(c)) return c;
     } catch {}
   }
-  return candidates[0] || path.join(__dirname, "stele.wasm");
+  return candidates[0] || (_nodePath ? _nodePath.join(__dirname, "stele.wasm") : "stele.wasm");
 }
 
 /**
@@ -315,8 +386,8 @@ export function getSubstrate() {
   if (typeof process !== "undefined" && process.versions?.node) {
     try {
       const wasmPath = resolveSteleWasmPath();
-      if (fs.existsSync(wasmPath)) {
-        const wasmBuf = fs.readFileSync(wasmPath);
+      if (_nodeFs && _nodeFs.existsSync(wasmPath)) {
+        const wasmBuf = _nodeFs.readFileSync(wasmPath);
         const wasmMod = new WebAssembly.Module(wasmBuf);
         wasmInst = new WebAssembly.Instance(wasmMod, getDefaultImports());
         if (wasmInst.exports._initialize) {
@@ -329,8 +400,8 @@ export function getSubstrate() {
   }
 
   if (!wasmInst) {
-    // Pure in-memory fallback instance
-    const memory = new WebAssembly.Memory({ initial: 256, maximum: 4096 });
+    // Pure in-memory fallback instance (unbounded up to 4 GB wasm32 limit)
+    const memory = new WebAssembly.Memory({ initial: 256 });
     wasmInst = { exports: { memory } };
   }
 
@@ -359,7 +430,9 @@ export async function getSubstrateAsync() {
   let wasmBytes = null;
   if (typeof process !== "undefined" && process.versions?.node) {
     const wasmPath = resolveSteleWasmPath();
-    wasmBytes = fs.readFileSync(wasmPath);
+    if (_nodeFs && _nodeFs.existsSync(wasmPath)) {
+      wasmBytes = _nodeFs.readFileSync(wasmPath);
+    }
   } else if (typeof fetch !== "undefined") {
     const res = await fetch(new URL("stele.wasm", import.meta.url));
     wasmBytes = await res.arrayBuffer();
@@ -373,7 +446,7 @@ export async function getSubstrateAsync() {
     }
     wasmInst = instance;
   } else {
-    const memory = new WebAssembly.Memory({ initial: 256, maximum: 4096 });
+    const memory = new WebAssembly.Memory({ initial: 256 });
     wasmInst = { exports: { memory } };
   }
 
@@ -386,7 +459,7 @@ export async function getSubstrateAsync() {
  * Plug-and-play module loader: Instantiates any downstream WASM module onto
  * the Stele shared-memory substrate with zero consumer boilerplate.
  *
- * @param {URL|string} wasmUrl - URL to the .wasm file (e.g. new URL("./corm.wasm", import.meta.url))
+ * @param {URL|string} wasmUrl - URL to the .wasm file (e.g. new URL("./module.wasm", import.meta.url))
  * @param {object} customImports - Optional module-specific host imports
  * @returns {WebAssembly.Instance}
  */
@@ -394,25 +467,30 @@ export function loadWasmModule(wasmUrl, customImports = {}) {
   const substrate = getSubstrate();
   const sharedMemory = substrate.memory;
 
-  const mergedImports = {
+  const baseImports = {
     wasi_snapshot_preview1: new Proxy({}, { get: () => () => 0 }),
-    xylem: {
-      wasm_xy_load_module: () => 0,
-      wasm_xy_unload_module: () => 0,
-      ...(customImports.xylem || {})
-    },
     env: {
       memory: sharedMemory,
       malloc: (sz) => substrate.malloc(sz),
       free: (ptr) => substrate.free(ptr),
+      calloc: (nmemb, sz) => substrate.calloc(nmemb, sz),
+      realloc: (ptr, sz) => substrate.realloc(ptr, sz),
       abort: () => { throw new Error("WASM abort"); },
       ...(customImports.env || {})
     },
     ...customImports
   };
-  mergedImports.env.memory = sharedMemory;
-  if (!mergedImports.env.malloc) mergedImports.env.malloc = (sz) => substrate.malloc(sz);
-  if (!mergedImports.env.free) mergedImports.env.free = (ptr) => substrate.free(ptr);
+  baseImports.env.memory = sharedMemory;
+  if (!baseImports.env.malloc) baseImports.env.malloc = (sz) => substrate.malloc(sz);
+  if (!baseImports.env.free) baseImports.env.free = (ptr) => substrate.free(ptr);
+  if (!baseImports.env.calloc) baseImports.env.calloc = (nmemb, sz) => substrate.calloc(nmemb, sz);
+  if (!baseImports.env.realloc) baseImports.env.realloc = (ptr, sz) => substrate.realloc(ptr, sz);
+  const mergedImports = new Proxy(baseImports, {
+    get(target, prop) {
+      if (prop in target) return target[prop];
+      return new Proxy({}, { get: () => () => 0 });
+    }
+  });
 
   let wasmBytes = null;
   if (typeof process !== "undefined" && process.versions?.node) {
@@ -436,6 +514,8 @@ export function loadWasmModule(wasmUrl, customImports = {}) {
         if (prop in target) return target[prop];
         if (prop === "malloc") return (sz) => substrate.malloc(sz);
         if (prop === "free") return (ptr) => substrate.free(ptr);
+        if (prop === "calloc") return (nmemb, sz) => substrate.calloc(nmemb, sz);
+        if (prop === "realloc") return (ptr, sz) => substrate.realloc(ptr, sz);
         if (prop === "memory") return sharedMemory;
         return undefined;
       }
@@ -464,25 +544,30 @@ export async function loadWasmModuleAsync(wasmUrl, customImports = {}) {
   const substrate = await getSubstrateAsync();
   const sharedMemory = substrate.memory;
 
-  const mergedImports = {
+  const baseImports = {
     wasi_snapshot_preview1: new Proxy({}, { get: () => () => 0 }),
-    xylem: {
-      wasm_xy_load_module: () => 0,
-      wasm_xy_unload_module: () => 0,
-      ...(customImports.xylem || {})
-    },
     env: {
       memory: sharedMemory,
       malloc: (sz) => substrate.malloc(sz),
       free: (ptr) => substrate.free(ptr),
+      calloc: (nmemb, sz) => substrate.calloc(nmemb, sz),
+      realloc: (ptr, sz) => substrate.realloc(ptr, sz),
       abort: () => { throw new Error("WASM abort"); },
       ...(customImports.env || {})
     },
     ...customImports
   };
-  mergedImports.env.memory = sharedMemory;
-  if (!mergedImports.env.malloc) mergedImports.env.malloc = (sz) => substrate.malloc(sz);
-  if (!mergedImports.env.free) mergedImports.env.free = (ptr) => substrate.free(ptr);
+  baseImports.env.memory = sharedMemory;
+  if (!baseImports.env.malloc) baseImports.env.malloc = (sz) => substrate.malloc(sz);
+  if (!baseImports.env.free) baseImports.env.free = (ptr) => substrate.free(ptr);
+  if (!baseImports.env.calloc) baseImports.env.calloc = (nmemb, sz) => substrate.calloc(nmemb, sz);
+  if (!baseImports.env.realloc) baseImports.env.realloc = (ptr, sz) => substrate.realloc(ptr, sz);
+  const mergedImports = new Proxy(baseImports, {
+    get(target, prop) {
+      if (prop in target) return target[prop];
+      return new Proxy({}, { get: () => () => 0 });
+    }
+  });
 
   if (typeof fetch !== "undefined") {
     const { instance } = await WebAssembly.instantiateStreaming(fetch(wasmUrl), mergedImports);
@@ -491,6 +576,8 @@ export async function loadWasmModuleAsync(wasmUrl, customImports = {}) {
         if (prop in target) return target[prop];
         if (prop === "malloc") return (sz) => substrate.malloc(sz);
         if (prop === "free") return (ptr) => substrate.free(ptr);
+        if (prop === "calloc") return (nmemb, sz) => substrate.calloc(nmemb, sz);
+        if (prop === "realloc") return (ptr, sz) => substrate.realloc(ptr, sz);
         if (prop === "memory") return sharedMemory;
         return undefined;
       }
@@ -507,12 +594,57 @@ export async function loadWasmModuleAsync(wasmUrl, customImports = {}) {
 }
 
 /**
+ * Detects whether the current Linux host uses musl libc rather than glibc.
+ * @returns {boolean}
+ */
+export function isMuslLinux() {
+  if (typeof process === "undefined" || process.platform !== "linux") {
+    return false;
+  }
+  try {
+    const getModule = globalThis.process?.getBuiltinModule;
+    const fs = getModule ? getModule("fs") : null;
+    if (fs?.existsSync) {
+      if (
+        fs.existsSync("/etc/alpine-release") ||
+        fs.existsSync(`/lib/ld-musl-${process.arch}.so.1`) ||
+        fs.existsSync("/lib/ld-musl-x86_64.so.1") ||
+        fs.existsSync("/lib/ld-musl-aarch64.so.1")
+      ) {
+        return true;
+      }
+    }
+    const rep = process.report?.getReport?.();
+    if (rep && typeof rep === "object") {
+      const header = rep.header || (typeof rep === "string" ? JSON.parse(rep).header : null);
+      if (header && !header.glibcVersionRuntime) {
+        return true;
+      }
+    }
+  } catch {}
+  return false;
+}
+
+/**
+ * Returns candidate `<os>-<cpu>[-musl]` prebuild directory keys in priority order.
+ * @returns {string[]}
+ */
+export function getPlatformPrebuildKeys() {
+  if (typeof process === "undefined") return [];
+  const base = `${process.platform}-${process.arch}`;
+  if (isMuslLinux()) {
+    return [`${base}-musl`, base];
+  }
+  return [base];
+}
+
+/**
  * Universal Node-API native addon discoverer.
  * Automatically checks local build, installed package, and project cwd paths.
  * Returns null if running in browser or addon unavailable.
  *
  * @param {string} callerImportMetaUrl - Caller's import.meta.url
- * @param {string} name - Module name (e.g. "corm", "bud", "joint")
+ * @param {string} name - Addon module stem (e.g. "stele", "custom")
  * @returns {object|null}
  */
 export function loadNativeAddon(callerImportMetaUrl, name) {
@@ -523,20 +655,42 @@ export function loadNativeAddon(callerImportMetaUrl, name) {
     const getModule = globalThis.process?.getBuiltinModule;
     const req = getModule ? getModule("module").createRequire(callerImportMetaUrl) : null;
     if (!req) return null;
+    const os = getModule ? getModule("os") : null;
+    const dlopenFlags =
+      os?.constants?.dlopen &&
+      typeof os.constants.dlopen.RTLD_NOW === "number" &&
+      typeof os.constants.dlopen.RTLD_GLOBAL === "number"
+        ? os.constants.dlopen.RTLD_NOW | os.constants.dlopen.RTLD_GLOBAL
+        : undefined;
 
+    const keys = getPlatformPrebuildKeys();
     const candidates = [
       `../build/Release/${name}_node.node`,
       `./${name}_node.node`,
       `./${name}.node`,
       `../dist/${name}.node`,
-      `../prebuilds/${process.platform}-${process.arch}/${name}.node`,
-      `./prebuilds/${process.platform}-${process.arch}/${name}.node`,
-      `../build/Release/duna_${name}.node`,
-      `./duna_${name}.node`,
-      `@tty-pt/${name}-${process.platform}-${process.arch}`
     ];
+    for (const key of keys) {
+      candidates.push(
+        `../prebuilds/${key}/${name}.node`,
+        `./prebuilds/${key}/${name}.node`,
+        `../prebuilds/${key}/${name}_node.node`,
+        `./prebuilds/${key}/${name}_node.node`,
+        `@tty-pt/${name}-${key}`
+      );
+    }
     for (const c of candidates) {
       try {
+        if (dlopenFlags !== undefined && typeof process.dlopen === "function") {
+          const resolved = req.resolve(c);
+          if (resolved && resolved.endsWith(".node")) {
+            const mod = { exports: {} };
+            process.dlopen(mod, resolved, dlopenFlags);
+            if (mod.exports && Object.keys(mod.exports).length > 0) {
+              return mod.exports;
+            }
+          }
+        }
         const mod = req(c);
         if (mod) return mod;
       } catch {}
@@ -544,3 +698,76 @@ export function loadNativeAddon(callerImportMetaUrl, name) {
   } catch {}
   return null;
 }
+
+/**
+ * Resolves directories containing native shared libraries (`lib<axis>.so` / `.dylib` / `.dll`)
+ * across installed `@tty-pt/<axis>` packages and local sibling source checkouts.
+ *
+ * @param {string} callerImportMetaUrl - Caller's import.meta.url
+ * @param {string[]} [axisNames] - Axis short names (default: ["joint", "lemma", "sepal", "islet"])
+ * @returns {string[]} Deduplicated list of existing directory paths
+ */
+export function resolveAxisPrebuildDirs(
+  callerImportMetaUrl,
+  axisNames = ["joint", "lemma", "sepal", "islet"]
+) {
+  if (typeof process === "undefined" || !process.versions?.node) {
+    return [];
+  }
+  const found = [];
+  const seen = new Set();
+  const hasAxisLib = (d, axis, fs, path) => {
+    if (!d || !fs.existsSync(d)) return false;
+    return (
+      fs.existsSync(path.join(d, `lib${axis}.so`)) ||
+      fs.existsSync(path.join(d, `lib${axis}.dylib`)) ||
+      fs.existsSync(path.join(d, `lib${axis}.dll`))
+    );
+  };
+  const addDir = (d, axis, fs, path) => {
+    if (d && !seen.has(d) && hasAxisLib(d, axis, fs, path)) {
+      seen.add(d);
+      found.push(d);
+    }
+  };
+  try {
+    const getModule = globalThis.process?.getBuiltinModule;
+    if (!getModule) return [];
+    const fs = getModule("fs");
+    const path = getModule("path");
+    const url = getModule("url");
+    const req = getModule("module").createRequire(callerImportMetaUrl);
+    const callerDir = path.dirname(url.fileURLToPath(callerImportMetaUrl));
+    const keys = getPlatformPrebuildKeys();
+
+    for (const axis of axisNames) {
+      // 1. Check installed @tty-pt/<axis> via require.resolve
+      try {
+        const pkgJson = req.resolve(`@tty-pt/${axis}/package.json`);
+        const pkgRoot = path.dirname(pkgJson);
+        for (const key of keys) {
+          addDir(path.join(pkgRoot, "prebuilds", key), axis, fs, path);
+        }
+        addDir(path.join(pkgRoot, "build", "Release"), axis, fs, path);
+        addDir(path.resolve(pkgRoot, "..", "lib"), axis, fs, path);
+      } catch {}
+
+      // 2. Check sibling @tty-pt/<axis> in node_modules relative to callerDir
+      const siblingPkgRoot = path.resolve(callerDir, "..", "..", axis);
+      for (const key of keys) {
+        addDir(path.join(siblingPkgRoot, "prebuilds", key), axis, fs, path);
+      }
+      addDir(path.join(siblingPkgRoot, "build", "Release"), axis, fs, path);
+
+      // 3. Check sibling external/lib<axis> layout relative to callerDir (e.g. external/libcorm/npm/dist)
+      const siblingRepo = path.resolve(callerDir, "..", "..", "..", `lib${axis}`);
+      addDir(path.join(siblingRepo, "lib"), axis, fs, path);
+      for (const key of keys) {
+        addDir(path.join(siblingRepo, "npm", "prebuilds", key), axis, fs, path);
+      }
+      addDir(path.join(siblingRepo, "npm", "build", "Release"), axis, fs, path);
+    }
+  } catch {}
+  return found;
+}
+

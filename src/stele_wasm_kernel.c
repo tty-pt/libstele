@@ -32,8 +32,8 @@ static stl_slot_t g_slots[STL_MAX_SLOTS];
 static const stl_module_ops_t *g_registered[MAX_REGISTERED_MODULES];
 static int g_registered_count = 0;
 
-/* Weakly linked table from application site if present */
-extern const stl_module_ops_t *g_site_modules[] WEAK_DECL;
+/* Weakly linked static module table from application if present */
+extern const stl_module_ops_t *g_stl_modules[] WEAK_DECL;
 
 ISO_EXPORT(int, stl_kernel_register_module, const stl_module_ops_t *ops)
 {
@@ -68,13 +68,16 @@ static const stl_module_ops_t *stl_find_module(const char *name)
             return g_registered[i];
         }
     }
-    /* Fallback search in static site table */
-    if (g_site_modules) {
-        for (int i = 0; g_site_modules[i] != NULL; i++) {
-            if (stl_mod_matches(g_site_modules[i]->name, name)) {
-                return g_site_modules[i];
+    /* Fallback search in static module table */
+    if (g_stl_modules) {
+        for (int i = 0; g_stl_modules[i] != NULL; i++) {
+            if (stl_mod_matches(g_stl_modules[i]->name, name)) {
+                return g_stl_modules[i];
             }
         }
+    }
+    if (g_registered_count == 1) {
+        return g_registered[0];
     }
     return NULL;
 }
@@ -82,12 +85,11 @@ static const stl_module_ops_t *stl_find_module(const char *name)
 ISO_EXPORT(int, stl_kernel_boot, void)
 {
     memset(g_slots, 0, sizeof(g_slots));
-    g_registered_count = 0;
 
-    /* Enumerate static site modules if present */
-    if (g_site_modules) {
-        for (int i = 0; g_site_modules[i] != NULL; i++) {
-            stl_kernel_register_module(g_site_modules[i]);
+    /* Enumerate static modules if present */
+    if (g_stl_modules) {
+        for (int i = 0; g_stl_modules[i] != NULL; i++) {
+            stl_kernel_register_module(g_stl_modules[i]);
         }
     }
     return 0;
@@ -111,6 +113,34 @@ ISO_EXPORT(int, stl_kernel_mount, int slot, const char *name, const char *json, 
 
     if (ops->init) {
         ops->init(json, len);
+    }
+
+    if (ops->mount) {
+        ops->mount(slot);
+    }
+    return 0;
+}
+
+ISO_EXPORT(int, stl_kernel_mount_bin, int slot, const char *name, const void *bin, size_t len)
+{
+    if (slot < 0 || slot >= STL_MAX_SLOTS) return -1;
+    const stl_module_ops_t *ops = stl_find_module(name);
+    if (!ops) return -2;
+
+    /* Unmount existing module on this slot */
+    if (g_slots[slot].active) {
+        stl_kernel_unmount(slot);
+    }
+
+    g_slots[slot].ops = ops;
+    g_slots[slot].active = 1;
+    strncpy(g_slots[slot].name, name, sizeof(g_slots[slot].name) - 1);
+    g_slots[slot].name[sizeof(g_slots[slot].name) - 1] = '\0';
+
+    if (ops->init_bin) {
+        ops->init_bin(bin, len);
+    } else if (ops->init) {
+        ops->init((const char *)bin, (int)len);
     }
 
     if (ops->mount) {
@@ -176,6 +206,16 @@ ISO_EXPORT(void, stl_kernel_tick, float dt, int width, int height)
     }
 }
 
+ISO_EXPORT(int, stl_kernel_has_tick, void)
+{
+    for (int i = 0; i < STL_MAX_SLOTS; i++) {
+        if (g_slots[i].active && g_slots[i].ops && g_slots[i].ops->tick) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 ISO_EXPORT(void, wasm_fetch_callback, int request_id, const char *data, int data_len)
 {
     for (int i = 0; i < STL_MAX_SLOTS; i++) {
@@ -195,14 +235,21 @@ ISO_EXPORT(int, stele_kernel_boot, void) { return stl_kernel_boot(); }
 ISO_EXPORT(int, stele_kernel_mount, int slot, const char *name, const char *json, int len) {
     return stl_kernel_mount(slot, name, json, len);
 }
+ISO_EXPORT(int, stele_kernel_mount_bin, int slot, const char *name, const void *bin, size_t len) {
+    return stl_kernel_mount_bin(slot, name, bin, len);
+}
 ISO_EXPORT(int, stele_kernel_unmount, int slot) { return stl_kernel_unmount(slot); }
 ISO_EXPORT(int, stele_kernel_update, int slot) { return stl_kernel_update(slot); }
 ISO_EXPORT(int, stele_kernel_action, int slot, int action_id, const char *data) {
     return stl_kernel_action(slot, action_id, data);
 }
+ISO_EXPORT(int, stele_kernel_dispatch_event, int slot, unsigned int node_id, const char *event_name, int bubbles, void *event_data) {
+    return stl_kernel_dispatch_event(slot, node_id, event_name, bubbles, event_data);
+}
 ISO_EXPORT(void, stele_kernel_tick, float dt, int width, int height) {
     stl_kernel_tick(dt, width, height);
 }
+ISO_EXPORT(int, stele_kernel_has_tick, void) { return stl_kernel_has_tick(); }
 ISO_EXPORT(uint64_t, stele_kernel_version, void) { return stl_kernel_version(); }
 ISO_EXPORT(int, stele_kernel_register_module, const stl_module_ops_t *ops) {
     return stl_kernel_register_module(ops);

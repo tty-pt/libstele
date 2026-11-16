@@ -52,6 +52,11 @@ test("WasmSubstrate provides single-memory allocation and dynamic module registr
   assert.equal(subA.kernelBoot(), 0);
   assert.equal(subA.kernelVersion(), 2);
   assert.equal(subA.kernelMount(0, "nonexistent_module", "{}"), -2);
+  assert.equal(subA.kernelMountBin(0, "nonexistent_module", new Uint8Array([1, 2, 3, 4])), -2);
   assert.equal(subA.kernelAction(0, 1, "test"), -1);
   assert.equal(subA.kernelUnmount(0), 0);
+
+  // In-WASM event bus ABI operations
+  assert.equal(subA.eventEmit("test:event", { ok: true }), 0);
+  assert.equal(subA.onEvent("test:event", "payload"), 0);
 });

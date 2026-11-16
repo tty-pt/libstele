@@ -1,4 +1,5 @@
 #include "./../include/ttypt/stele.h"
+#include "./../include/ttypt/stele_wasm.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -16,6 +17,22 @@
 #else
 #include <unistd.h>
 #endif
+
+static int g_event_hits = 0;
+static char g_last_payload[64];
+
+static void
+on_test_event(const char *topic, const void *payload, size_t len, void *user_data)
+{
+	(void)topic;
+	int *counter = (int *)user_data;
+	if (counter) (*counter)++;
+	g_event_hits++;
+	if (payload && len > 0 && len < sizeof(g_last_payload)) {
+		memcpy(g_last_payload, payload, len);
+		g_last_payload[len] = '\0';
+	}
+}
 
 int
 main(void)
@@ -71,6 +88,17 @@ main(void)
 	uint64_t rss = stele_self_rss_bytes();
 	assert(rss > 0);
 	printf("ok: stele_self_rss_bytes -> %llu\n", (unsigned long long)rss);
+
+	/* 7. stl_event_on / stl_event_emit / stl_event_off */
+	int user_counter = 0;
+	assert(stl_event_on("test:ping", on_test_event, &user_counter) == 0);
+	assert(stl_event_emit("test:ping", "pong", 4) == 0);
+	assert(g_event_hits == 1 && user_counter == 1);
+	assert(strcmp(g_last_payload, "pong") == 0);
+	assert(stl_event_off("test:ping", on_test_event) == 1);
+	assert(stl_event_emit("test:ping", "after", 5) == 0);
+	assert(g_event_hits == 1);
+	printf("ok: stl_event_on / stl_event_emit / stl_event_off\n");
 
 	printf("stele_port_test: all assertions passed\n");
 	return 0;

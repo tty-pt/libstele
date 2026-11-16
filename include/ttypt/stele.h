@@ -13,8 +13,8 @@
  * @file stele.h
  * @brief Cross-platform system shims: logging, dl, env, strings.
  *
- * Portable wrappers (POSIX mirrors / Win32 emulation) for the low-level
- * facilities the site runtime needs on both platforms.
+ * Portable wrappers (POSIX mirrors / Win32 emulation) for low-level
+ * system facilities on both platforms.
  */
 
 #ifdef __cplusplus
