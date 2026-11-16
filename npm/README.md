@@ -8,17 +8,19 @@
 [![License: BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](../LICENSE)
 [![Standards: WebAssembly Reactor](https://img.shields.io/badge/WASM-Reactor--Substrate-orange.svg)](#)
 
-> Universal Node.js and Browser bindings for **`libstele`**, the zero-dependency system substrate for plain C and isomorphic WebAssembly. Provides high-resolution monotonic clocks, memory diagnostics, and the decoupled `CapabilityRegistry` plug-and-play contract.
+> Universal Node.js and Browser bindings for **`libstele`**, the zero-dependency system substrate for plain C and isomorphic WebAssembly. Provides high-resolution monotonic clocks, memory diagnostics, and the decoupled `CapabilityRegistry` plug-and-play contract. Canonical C headers: `<ttypt/stele.h>`, `<ttypt/iso.h>`, and `<ttypt/stele_wasm.h>`.
+
+📖 **Full C & Substrate Documentation**: See the main [**libstele GitHub README**](https://github.com/tty-pt/libstele#readme) for single-allocator shared WASM memory, POSIX/Win32 socket shims, and `STL_WASM_MODULE` slot lifecycle.
 
 ---
 
-## 1. Quick Start
-
-Install via npm:
+## 1. Quickstart & Installation
 
 ```bash
 npm install @tty-pt/stele
 ```
+
+**Native OS Packages (`tty.pt`)**: Prebuilt native C packages (`libstele`) for Linux (`apt`, `apk`, `pacman`, `dnf`), macOS (`brew`), Windows (`winget`, MSYS2), and OpenBSD (`pkg_add`) are available via the [**tty.pt package repositories**](https://github.com/tty-pt/ci/blob/main/docs/install.md).
 
 Usage in modern JavaScript / TypeScript:
 
@@ -120,3 +122,9 @@ When building native Node addons or WebAssembly reactors:
 CFLAGS += -I./node_modules/@tty-pt/stele/include
 LDLIBS += -lstele
 ```
+
+---
+
+## License
+
+BSD-2-Clause — Copyright (c) 2026, Paulo Quirino <quirinpa@gmail.com>. See [LICENSE](https://github.com/tty-pt/libstele/blob/main/LICENSE).
