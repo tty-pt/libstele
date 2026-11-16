@@ -13,6 +13,11 @@
   - Added `isMuslLinux()` and `getPlatformPrebuildKeys()` to detect Alpine/musl hosts (`linux-<arch>-musl` with fallback to `linux-<arch>`) during native Node-API addon loading.
   - Added `resolveAxisPrebuildDirs()` to automatically discover sibling `@tty-pt/{lemma,sepal,joint,islet}` shared library directories across `prebuilds/<platform-arch>`, `build/Release`, and local `lib` paths.
 
+## [1.6.2] - 2026-11-13
+
+### Packaging
+- Built the `@tty-pt/stele` npm tarball once in CI with a self-contained native Node-API addon per platform (`prebuilds/<os>-<cpu>/`) alongside `stele.wasm` and C headers (`include/ttypt/`), verified across Linux, macOS, and Windows before publishing.
+
 ## [1.6.1] - 2026-11-13
 
 ### Changed
