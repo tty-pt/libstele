@@ -34,6 +34,20 @@ on_test_event(const char *topic, const void *payload, size_t len, void *user_dat
 	}
 }
 
+static _Atomic uint32_t g_wq_sum = 0;
+
+typedef struct {
+	stl_wq_task_t task;
+	uint32_t      val;
+} test_wq_job_t;
+
+static void
+on_wq_job(void *arg)
+{
+	test_wq_job_t *job = (test_wq_job_t *)arg;
+	atomic_fetch_add_explicit(&g_wq_sum, job->val, memory_order_relaxed);
+}
+
 int
 main(void)
 {
@@ -99,6 +113,28 @@ main(void)
 	assert(stl_event_emit("test:ping", "after", 5) == 0);
 	assert(g_event_hits == 1);
 	printf("ok: stl_event_on / stl_event_emit / stl_event_off\n");
+
+	/* 8. stl_wq multi-threaded MPMC ring + drain/wait/step */
+	assert(stl_cpu_count() >= 1u);
+	stl_wq_t *wq = stl_wq_create("test_wq", 2, 64);
+	assert(wq != NULL);
+	test_wq_job_t jobs[128];
+	uint32_t expected_sum = 0;
+	atomic_store_explicit(&g_wq_sum, 0u, memory_order_relaxed);
+	for (uint32_t i = 0; i < 128; i++) {
+		stl_wq_task_init(&jobs[i].task);
+		jobs[i].val = i + 1u;
+		expected_sum += jobs[i].val;
+		assert(stl_wq_submit(wq, &jobs[i].task, on_wq_job, &jobs[i]) >= 0);
+	}
+	stl_wq_wait(wq, &jobs[127].task);
+	stl_wq_drain(wq);
+	for (uint32_t i = 0; i < 128; i++) {
+		assert(stl_wq_done(&jobs[i].task));
+	}
+	assert(atomic_load_explicit(&g_wq_sum, memory_order_acquire) == expected_sum);
+	stl_wq_destroy(wq);
+	printf("ok: stl_wq multi-threaded MPMC ring (%u jobs -> sum=%u)\n", 128u, expected_sum);
 
 	printf("stele_port_test: all assertions passed\n");
 	return 0;

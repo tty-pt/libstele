@@ -1,19 +1,19 @@
 all := libstele stele_dlopen_test stele_port_test
-libstele-obj-y := src/stele_event.o
+libstele-obj-y := src/stele_event.o src/stele_wq.o
 
-LDLIBS-libstele-Linux := -ldl
-LDLIBS-libstele-Darwin := -ldl
-LDLIBS-libstele-OpenBSD :=
-LDLIBS-libstele-FreeBSD :=
-LDLIBS-libstele-NetBSD :=
-LDLIBS-libstele-DragonFly :=
+LDLIBS-libstele-Linux := -ldl -lpthread
+LDLIBS-libstele-Darwin := -ldl -lpthread
+LDLIBS-libstele-OpenBSD := -lpthread
+LDLIBS-libstele-FreeBSD := -lpthread
+LDLIBS-libstele-NetBSD := -lpthread
+LDLIBS-libstele-DragonFly := -lpthread
 LDLIBS-libstele-Windows := -lws2_32 -lpsapi
 LDLIBS-stele_dlopen_test := -lstele
 LDLIBS-stele_dlopen_test-Windows := -lws2_32 -lpsapi
 LDLIBS-stele_port_test := -lstele
 LDLIBS-stele_port_test-Windows := -lws2_32 -lpsapi
 
-WASM_SRCS := src/stele_wasm_kernel.c src/stele_event.c
+WASM_SRCS := src/stele_wasm_kernel.c src/stele_event.c src/stele_wq.c
 
 include ../mk/include.mk
 

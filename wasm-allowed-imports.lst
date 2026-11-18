@@ -5,4 +5,6 @@ stele.stl_host_event_emit
 stele.stl_host_emit_patch
 stele.stl_host_log
 stele.stl_host_fetch
+stele.stl_host_cpu_count
+stele.stl_host_spawn_worker
 clipboard.stl_clipboard_copy

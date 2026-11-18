@@ -27,6 +27,12 @@
 #include "iso.h"
 #endif
 
+#if __has_include(<ttypt/wq.h>)
+#include <ttypt/wq.h>
+#else
+#include "wq.h"
+#endif
+
 #ifndef WEAK
 #if defined(__APPLE__)
 #define WEAK __attribute__((weak_import))

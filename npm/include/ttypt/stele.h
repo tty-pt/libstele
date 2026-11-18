@@ -27,6 +27,12 @@ extern "C" {
 #include <time.h>
 #include <sys/types.h>
 
+#if __has_include(<ttypt/wq.h>)
+#include <ttypt/wq.h>
+#else
+#include "wq.h"
+#endif
+
 #ifdef __APPLE__
 /** @brief Mark a symbol as weak-linked (macOS weak import). */
 #define WEAK __attribute__((weak_import))
