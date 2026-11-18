@@ -1,3 +1,14 @@
+## [Unreleased] (target: v1.8.0)
+
+### Added
+- **Cross-Platform Lock-Free Workqueue & Worker Pool (`include/ttypt/wq.h`, `src/stele_wq.c`, `src/stele_wq_test.c`, `wasm-allowed-exports.lst`)**:
+  - Added `<ttypt/wq.h>` providing a zero-allocation-per-job workqueue (`stl_wq_t`, `stl_wq_task_t`) backed by POSIX `pthread` worker pools on Linux/macOS/BSD, Win32 threads + `SRWLOCK`/`CONDITION_VARIABLE` on Windows, and cooperative/worker-assisted queues (`stl_wq_step`, `stl_wq_worker_entry`) on WebAssembly.
+  - Exported `stl_cpu_count()`, `stl_wq_create()`, `stl_wq_submit()`, `stl_wq_step()`, `stl_wq_wait()`, `stl_wq_drain()`, `stl_wq_destroy()`, `stl_wq_worker_entry()`, inline task helpers (`stl_wq_task_init`, `stl_wq_done`, `stl_wq_busy`), `stele_wq_*` / `wq_*` aliases, and portable `STL_THREAD_LOCAL` storage macro.
+
+### Fixed
+- **Main-Thread Worker Capability Deduplication (`htdocs/stele-client.js`, `npm/dist/client.js`)**:
+  - Skipped loading redundant `*-worker` capabilities on the main browser thread when a primary rendering bridge (`webgl` or `lamina`) is already declared on the slot, avoiding duplicate worker capability initialization.
+
 ## [1.7.1] - 2026-11-14
 
 ### Fixed

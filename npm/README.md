@@ -114,6 +114,7 @@ Instantiates a downstream WebAssembly module onto the shared `WasmSubstrate` lin
 
 - `<ttypt/stele.h>`: Cross-platform POSIX/Win32 socket and system shims.
 - `<ttypt/iso.h>`: Universal `ISO_EXPORT` and `ISO_IMPORT` macros for isomorphic C modules compiled natively for SSR and into `.wasm` for the browser.
+- `<ttypt/wq.h>`: Cross-platform lock-free workqueue (`stl_wq_*` / `stele_wq_*`), logical processor discovery (`stl_cpu_count`), and `STL_THREAD_LOCAL` storage across POSIX threads, Win32 threads, and WebAssembly workers.
 - `<ttypt/stele_wasm.h>`: Universal single-instantiation WASM kernel substrate and slot orchestration ABI.
 
 When building native Node addons or WebAssembly reactors:
