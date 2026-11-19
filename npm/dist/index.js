@@ -316,12 +316,16 @@ export function getDefaultImports() {
     stl_host_set_location: () => {},
     stl_host_invalidate: () => {},
     stl_host_event_emit: () => {},
+    stl_host_cpu_count: () => 4,
+    stl_host_spawn_worker: () => 0,
     stele_host_emit_patch: () => {},
     stele_host_log: () => {},
     stele_host_fetch: () => {},
     stele_host_set_location: () => {},
     stele_host_invalidate: () => {},
     stele_host_event_emit: () => {},
+    stele_host_cpu_count: () => 4,
+    stele_host_spawn_worker: () => 0,
   };
   return {
     stele: steleImports,
