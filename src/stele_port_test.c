@@ -136,6 +136,121 @@ main(void)
 	stl_wq_destroy(wq);
 	printf("ok: stl_wq multi-threaded MPMC ring (%u jobs -> sum=%u)\n", 128u, expected_sum);
 
+	/* 9. stl_username / stl_home_dir / stl_temp_dir / stl_config_dir / stl_data_dir / stl_exe_dir / stl_so_ext / stl_mkdir_p */
+	char ubuf[128], hbuf[512], tbuf[512], cbuf[512], dbuf[512], ebuf[512];
+	assert(stl_username(ubuf, sizeof(ubuf)) == ubuf && ubuf[0] != '\0');
+	assert(stl_home_dir(hbuf, sizeof(hbuf)) == hbuf && hbuf[0] != '\0');
+	assert(stl_temp_dir(tbuf, sizeof(tbuf)) == tbuf && tbuf[0] != '\0');
+	assert(stl_config_dir("stele-test", cbuf, sizeof(cbuf)) == cbuf && strstr(cbuf, "stele-test") != NULL);
+	assert(stl_data_dir("stele-test", dbuf, sizeof(dbuf)) == dbuf && strstr(dbuf, "stele-test") != NULL);
+	assert(stl_exe_dir(ebuf, sizeof(ebuf)) == ebuf && ebuf[0] != '\0');
+	assert(stl_so_ext() != NULL && (strcmp(stl_so_ext(), "so") == 0 || strcmp(stl_so_ext(), "dll") == 0));
+	char mkdir_root[512], mkdir_mid[560], mkdir_nested[600];
+	snprintf(mkdir_root, sizeof(mkdir_root), "%.*s/stele-mkdir-test-%d", 400, tbuf, (int)getpid());
+	snprintf(mkdir_mid, sizeof(mkdir_mid), "%s/a", mkdir_root);
+	snprintf(mkdir_nested, sizeof(mkdir_nested), "%s/b", mkdir_mid);
+	assert(stl_mkdir_p(mkdir_nested) == 0);
+	rmdir(mkdir_nested);
+	rmdir(mkdir_mid);
+	rmdir(mkdir_root);
+	printf("ok: path/user helpers (user=%s exe=%s ext=%s)\n", ubuf, ebuf, stl_so_ext());
+
+	/* 10. stl_wake_t poll/signal/drain */
+	stl_wake_t wake;
+	assert(stl_wake_init(&wake) == 0);
+	assert(stl_wake_fd(&wake) != STL_INVALID_SOCKET);
+	struct pollfd wpfd = { .fd = stl_wake_fd(&wake), .events = POLLIN, .revents = 0 };
+	assert(stl_poll(&wpfd, 1, 0) == 0);
+	stl_wake_signal(&wake);
+	wpfd.revents = 0;
+	assert(stl_poll(&wpfd, 1, 100) == 1 && (wpfd.revents & POLLIN));
+	stl_wake_drain(&wake);
+	wpfd.revents = 0;
+	assert(stl_poll(&wpfd, 1, 0) == 0);
+	stl_wake_close(&wake);
+	printf("ok: stl_wake_t\n");
+
+	/* 11. stl_ipc_listen / connect / accept / timeout (TCP + logical name) */
+	stl_ipc_listener_t tcp_l;
+	assert(stl_ipc_listen("tcp://127.0.0.1:0", 4, &tcp_l) == 0);
+	assert(tcp_l.port > 0);
+	char tcp_ep[64];
+	snprintf(tcp_ep, sizeof(tcp_ep), "tcp://127.0.0.1:%u", (unsigned)tcp_l.port);
+	stl_socket_t cli = stl_ipc_connect(tcp_ep);
+	assert(cli != STL_INVALID_SOCKET);
+	stl_socket_t srv = stl_ipc_accept(&tcp_l);
+	assert(srv != STL_INVALID_SOCKET);
+	assert(stl_sock_set_timeout(cli, 50, 50) == 0);
+	assert(stl_sock_send(cli, "ping", 4, 0) == 4);
+	char ibuf[16] = {0};
+	assert(stl_sock_recv(srv, ibuf, sizeof(ibuf), 0) == 4);
+	assert(strcmp(ibuf, "ping") == 0);
+	stl_sock_close(srv);
+	stl_sock_close(cli);
+	stl_ipc_close_listener(&tcp_l);
+
+	char svc_name[64];
+	snprintf(svc_name, sizeof(svc_name), "stele-test-%d", (int)getpid());
+	stl_ipc_listener_t svc_l;
+	assert(stl_ipc_listen(svc_name, 4, &svc_l) == 0);
+	cli = stl_ipc_connect(svc_name);
+	assert(cli != STL_INVALID_SOCKET);
+	srv = stl_ipc_accept(&svc_l);
+	assert(srv != STL_INVALID_SOCKET);
+	assert(stl_sock_send(srv, "ok", 2, 0) == 2);
+	memset(ibuf, 0, sizeof(ibuf));
+	assert(stl_sock_recv(cli, ibuf, sizeof(ibuf), 0) == 2);
+	assert(strcmp(ibuf, "ok") == 0);
+	stl_sock_close(srv);
+	stl_sock_close(cli);
+	stl_ipc_close_listener(&svc_l);
+	printf("ok: stl_ipc_listen / connect / accept\n");
+
+	/* 12. stl_spawn + stl_proc_wait + stl_proc_kill + stl_spawn_detached */
+#ifdef _WIN32
+	const char *argv_echo[] = { "cmd.exe", "/c", "echo stele-proc-ok", NULL };
+	const char *argv_cat[] = { "cmd.exe", "/c", "more", NULL };
+	const char *argv_sleep[] = { "cmd.exe", "/c", "ping -n 5 127.0.0.1 >NUL", NULL };
+	const char *argv_det[] = { "cmd.exe", "/c", "exit 0", NULL };
+#else
+	const char *argv_echo[] = { "/bin/sh", "-c", "echo stele-proc-ok; echo err >&2", NULL };
+	const char *argv_cat[] = { "/bin/cat", NULL };
+	const char *argv_sleep[] = { "/bin/sh", "-c", "sleep 5", NULL };
+	const char *argv_det[] = { "/bin/true", NULL };
+#endif
+	stl_proc_t p;
+	assert(stl_spawn(argv_echo, STL_SPAWN_STDOUT | STL_SPAWN_MERGE_STDERR, &p) == 0);
+	assert(p.stdout_fd >= 0);
+	char obuf[128] = {0};
+	ssize_t nread = read(p.stdout_fd, obuf, sizeof(obuf) - 1);
+	assert(nread > 0);
+	assert(strstr(obuf, "stele-proc-ok") != NULL);
+	int ec = -1;
+	assert(stl_proc_wait(&p, &ec, -1) == 0 && ec == 0);
+	stl_proc_close(&p);
+
+	assert(stl_spawn(argv_cat, STL_SPAWN_STDIN | STL_SPAWN_STDOUT, &p) == 0);
+	assert(p.stdin_fd >= 0 && p.stdout_fd >= 0);
+	assert(write(p.stdin_fd, "stdin-ok\n", 9) == 9);
+	close(p.stdin_fd);
+	p.stdin_fd = -1;
+	memset(obuf, 0, sizeof(obuf));
+	nread = read(p.stdout_fd, obuf, sizeof(obuf) - 1);
+	assert(nread > 0 && strstr(obuf, "stdin-ok") != NULL);
+	assert(stl_proc_wait(&p, &ec, -1) == 0 && ec == 0);
+	stl_proc_close(&p);
+
+	assert(stl_spawn(argv_sleep, STL_SPAWN_NEW_GROUP, &p) == 0);
+	assert(stl_proc_wait(&p, &ec, 10) == 1); /* still running */
+	assert(stl_proc_kill(&p, 1) == 0);
+	assert(stl_proc_wait(&p, &ec, 2000) == 0);
+	stl_proc_close(&p);
+
+	assert(stl_spawn_detached(argv_det) == 0);
+	const char *argv_bad[] = { "/nonexistent_stele_binary_xyz", NULL };
+	assert(stl_spawn(argv_bad, 0, &p) == -1);
+	printf("ok: stl_spawn / stl_proc_wait / stl_proc_kill / stl_spawn_detached\n");
+
 	printf("stele_port_test: all assertions passed\n");
 	return 0;
 }

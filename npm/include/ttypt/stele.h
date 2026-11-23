@@ -155,6 +155,12 @@ typedef unsigned long nfds_t;
 typedef int stl_socket_t;
 #endif
 
+#ifdef _WIN32
+#define STL_INVALID_SOCKET ((stl_socket_t)INVALID_SOCKET)
+#else
+#define STL_INVALID_SOCKET (-1)
+#endif
+
 int stl_poll(struct pollfd *fds, nfds_t nfds, int timeout);
 void stl_stop_on_signal(void (*handler)(int));
 void stl_ignore_pipe(void);
@@ -169,11 +175,78 @@ int stl_sock_listen(stl_socket_t fd, int backlog);
 stl_socket_t stl_sock_accept(stl_socket_t fd, struct sockaddr *addr, socklen_t *addrlen);
 int stl_sock_connect(stl_socket_t fd, const struct sockaddr *addr, socklen_t addrlen);
 int stl_sock_set_nonblock(stl_socket_t fd, int nonblock);
+int stl_sock_set_timeout(stl_socket_t fd, int recv_ms, int send_ms);
 int stl_sock_wouldblock(void);
 const char *stl_sock_strerror(void);
 
+/* Cross-platform pollable wake primitive (pipe on POSIX, loopback socket pair on Win32) */
+typedef struct {
+	stl_socket_t rfd;
+	stl_socket_t wfd;
+} stl_wake_t;
+
+int stl_wake_init(stl_wake_t *w);
+void stl_wake_close(stl_wake_t *w);
+stl_socket_t stl_wake_fd(const stl_wake_t *w);
+void stl_wake_signal(stl_wake_t *w);
+void stl_wake_drain(stl_wake_t *w);
+
+/* Cross-platform local IPC listener/client ("ren-jarvis", "unix:/path", or "tcp://host:port") */
+typedef struct {
+	stl_socket_t fd;
+	int          is_unix;
+	char         path[512];
+	uint16_t     port;
+} stl_ipc_listener_t;
+
+int stl_ipc_listen(const char *endpoint, int backlog, stl_ipc_listener_t *out);
+stl_socket_t stl_ipc_accept(const stl_ipc_listener_t *l);
+void stl_ipc_close_listener(stl_ipc_listener_t *l);
+stl_socket_t stl_ipc_connect(const char *endpoint);
+
+/* Cross-platform subprocess management */
+#define STL_SPAWN_STDIN         (1 << 0)
+#define STL_SPAWN_STDOUT        (1 << 1)
+#define STL_SPAWN_STDERR        (1 << 2)
+#define STL_SPAWN_MERGE_STDERR  (1 << 3)
+#define STL_SPAWN_DETACHED      (1 << 4)
+#define STL_SPAWN_NEW_GROUP     (1 << 5)
+
+typedef struct {
+#ifdef _WIN32
+	void         *handle;
+	void         *job;
+	unsigned long pid;
+#else
+	pid_t         pid;
+#endif
+	int           stdin_fd;
+	int           stdout_fd;
+	int           stderr_fd;
+	int           is_group;
+} stl_proc_t;
+
+int stl_spawn(const char *const argv[], int flags, stl_proc_t *out);
+int stl_spawn_detached(const char *const argv[]);
+int stl_proc_wait(stl_proc_t *p, int *exit_code, int timeout_ms);
+int stl_proc_kill(stl_proc_t *p, int force);
+void stl_proc_close(stl_proc_t *p);
+
+/* Cross-platform user/path/shared-library helpers */
+const char *stl_username(char *buf, size_t cap);
+const char *stl_home_dir(char *buf, size_t cap);
+const char *stl_temp_dir(char *buf, size_t cap);
+const char *stl_config_dir(const char *app, char *buf, size_t cap);
+const char *stl_data_dir(const char *app, char *buf, size_t cap);
+const char *stl_exe_dir(char *buf, size_t cap);
+const char *stl_so_ext(void);
+int stl_mkdir_p(const char *path);
+
 /* stele_* aliases */
 typedef stl_socket_t stele_socket_t;
+typedef stl_wake_t stele_wake_t;
+typedef stl_ipc_listener_t stele_ipc_listener_t;
+typedef stl_proc_t stele_proc_t;
 typedef stllog_t stelelog_t;
 
 #define stelelog stllog
@@ -195,6 +268,7 @@ typedef stllog_t stelelog_t;
 #define stele_gmtime_r stl_gmtime_r
 #define stele_realpath stl_realpath
 #define stele_mkdir stl_mkdir
+#define stele_mkdir_p stl_mkdir_p
 #define stele_ftruncate stl_ftruncate
 #define stele_dprintf stl_dprintf
 #define stele_flock stl_flock
@@ -215,8 +289,30 @@ typedef stllog_t stelelog_t;
 #define stele_sock_accept stl_sock_accept
 #define stele_sock_connect stl_sock_connect
 #define stele_sock_set_nonblock stl_sock_set_nonblock
+#define stele_sock_set_timeout stl_sock_set_timeout
 #define stele_sock_wouldblock stl_sock_wouldblock
 #define stele_sock_strerror stl_sock_strerror
+#define stele_wake_init stl_wake_init
+#define stele_wake_close stl_wake_close
+#define stele_wake_fd stl_wake_fd
+#define stele_wake_signal stl_wake_signal
+#define stele_wake_drain stl_wake_drain
+#define stele_ipc_listen stl_ipc_listen
+#define stele_ipc_accept stl_ipc_accept
+#define stele_ipc_close_listener stl_ipc_close_listener
+#define stele_ipc_connect stl_ipc_connect
+#define stele_spawn stl_spawn
+#define stele_spawn_detached stl_spawn_detached
+#define stele_proc_wait stl_proc_wait
+#define stele_proc_kill stl_proc_kill
+#define stele_proc_close stl_proc_close
+#define stele_username stl_username
+#define stele_home_dir stl_home_dir
+#define stele_temp_dir stl_temp_dir
+#define stele_config_dir stl_config_dir
+#define stele_data_dir stl_data_dir
+#define stele_exe_dir stl_exe_dir
+#define stele_so_ext stl_so_ext
 
 #ifdef __cplusplus
 }
