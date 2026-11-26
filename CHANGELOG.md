@@ -1,13 +1,30 @@
 ## [Unreleased] (target: v1.8.0)
 
 ### Added
-- **Cross-Platform Lock-Free Workqueue & Worker Pool (`include/ttypt/wq.h`, `src/stele_wq.c`, `src/stele_wq_test.c`, `wasm-allowed-exports.lst`)**:
-  - Added `<ttypt/wq.h>` providing a zero-allocation-per-job workqueue (`stl_wq_t`, `stl_wq_task_t`) backed by POSIX `pthread` worker pools on Linux/macOS/BSD, Win32 threads + `SRWLOCK`/`CONDITION_VARIABLE` on Windows, and cooperative/worker-assisted queues (`stl_wq_step`, `stl_wq_worker_entry`) on WebAssembly.
-  - Exported `stl_cpu_count()`, `stl_wq_create()`, `stl_wq_submit()`, `stl_wq_step()`, `stl_wq_wait()`, `stl_wq_drain()`, `stl_wq_destroy()`, `stl_wq_worker_entry()`, inline task helpers (`stl_wq_task_init`, `stl_wq_done`, `stl_wq_busy`), `stele_wq_*` / `wq_*` aliases, and portable `STL_THREAD_LOCAL` storage macro.
+- **Portable Local IPC, Subprocess, Wake, Socket & Path Shims (`include/ttypt/stele.h`, `npm/include/ttypt/stele.h`, `src/stele_ipc.c`, `src/stele_proc.c`, `src/stele_port_test.c`)**:
+  - Added cross-platform pollable wake primitive (`stl_wake_t`, `stl_wake_init()`, `stl_wake_close()`, `stl_wake_fd()`, `stl_wake_signal()`, `stl_wake_drain()` — pipe on POSIX, loopback socket pair on Win32) (`185a839`).
+  - Added portable local IPC listener/client API (`stl_ipc_listener_t`, `stl_ipc_listen()`, `stl_ipc_accept()`, `stl_ipc_close_listener()`, `stl_ipc_connect()`) supporting named local endpoints, `unix:/path`, and `tcp://host:port` (`185a839`).
+  - Added cross-platform subprocess spawning and lifecycle API (`stl_proc_t`, `STL_SPAWN_STDIN`/`STDOUT`/`STDERR`/`MERGE_STDERR`/`DETACHED`/`NEW_GROUP`, `stl_spawn()`, `stl_spawn_detached()`, `stl_proc_wait()`, `stl_proc_kill()`, `stl_proc_close()`) (`185a839`).
+  - Added socket timeout and user/path/shared-library helpers (`STL_INVALID_SOCKET`, `stl_sock_set_timeout()`, `stl_username()`, `stl_home_dir()`, `stl_temp_dir()`, `stl_config_dir()`, `stl_data_dir()`, `stl_exe_dir()`, `stl_so_ext()`, `stl_mkdir_p()`) along with `stele_*` aliases (`185a839`).
+- **Unified Kernel Instance Reuse & Host Workqueue Defaults (`htdocs/stele-client.js`, `npm/dist/client.js`, `npm/dist/index.js`)**:
+  - Updated `SteleWasmClient` to prefer `data-wasm-bundle` and reuse a single unified kernel WASM instance across slots (`588f1bd`).
+  - Added default `stl_host_cpu_count` / `stele_host_cpu_count` and `stl_host_spawn_worker` / `stele_host_spawn_worker` host imports to `getDefaultImports()` (`57d7373`).
+- **Cross-Platform Lock-Free Workqueue & Worker Pool (`include/ttypt/wq.h`, `src/stele_wq.c`, `src/stele_port_test.c`, `wasm-allowed-imports.lst`)**:
+  - Added `<ttypt/wq.h>` providing a zero-allocation-per-job workqueue (`stl_wq_t`, `stl_wq_task_t`) backed by POSIX `pthread` worker pools on Linux/macOS/BSD, Win32 threads + `SRWLOCK`/`CONDITION_VARIABLE` on Windows, and cooperative/worker-assisted queues (`stl_wq_step`, `stl_wq_worker_entry`) on WebAssembly (`4cbeb1d`).
+  - Exported `stl_cpu_count()`, `stl_wq_create()`, `stl_wq_submit()`, `stl_wq_step()`, `stl_wq_wait()`, `stl_wq_drain()`, `stl_wq_destroy()`, `stl_wq_worker_entry()`, inline task helpers (`stl_wq_task_init`, `stl_wq_done`, `stl_wq_busy`), `stele_wq_*` / `wq_*` aliases, and portable `STL_THREAD_LOCAL` storage macro (`4cbeb1d`).
+
+### Changed
+- **Browser WASI & Encoding Performance (`htdocs/stele-client.js`)**:
+  - Implemented WASI `clock_time_get`, reused singleton `TextDecoder`/`TextEncoder` instances, and added a worker canvas generation counter (`1d78d11`).
+- **Standardized Package Metadata (`npm/package.json`, `npm/README.md`)**:
+  - Standardized author (`Paulo Quirino <quirinpa@gmail.com>`), `BSD-2-Clause` license, and npm README (`b795995`).
 
 ### Fixed
-- **Main-Thread Worker Capability Deduplication (`htdocs/stele-client.js`, `npm/dist/client.js`)**:
-  - Skipped loading redundant `*-worker` capabilities on the main browser thread when a primary rendering bridge (`webgl` or `lamina`) is already declared on the slot, avoiding duplicate worker capability initialization.
+- **Browser Client Canvas & Capability Bridge Fixes (`htdocs/stele-client.js`, `npm/dist/client.js`)**:
+  - Triggered `wasm_canvas_render` and flushed canvases on `stele:canvas_attach` (`bcca881`).
+  - Preserved WebGL `OffscreenCanvas` resolution on container resize (`76d035a`).
+  - Skipped duplicate `bud` capability bridge initialization and deferred `bridge.mount` until after worker `mount_slot` (`7e1f455`).
+  - Skipped loading redundant `*-worker` capabilities on the main browser thread when a primary rendering bridge (`webgl` or `lamina`) is already declared on the slot (`4cbeb1d`).
 
 ## [1.7.1] - 2026-11-14
 

@@ -100,6 +100,7 @@ Instantiates a downstream WebAssembly module onto the shared `WasmSubstrate` lin
 
 ### Browser Client Runtime (`@tty-pt/stele/client`)
 `SteleWasmClient` (`dist/client.js` / `htdocs/stele-client.js`) provides the browser-side multi-slot hydration runtime:
+* Unified kernel instance reuse across slots via `data-wasm-bundle`.
 * Zero-copy binary state hand-off (`application/octet-stream`, Base64 `data-state-bin`, or `meta[name="state-src"]` preloads).
 * On-demand lazy slot mounting (`lazyMountSlot` with `interaction`, `visible`, or `manual` triggers).
 * Cross-slot and host event bus (`client.on(topic, cb)`, `client.off(topic, cb)`, `client.emit(topic, payload)`).
@@ -112,7 +113,7 @@ Instantiates a downstream WebAssembly module onto the shared `WasmSubstrate` lin
 
 `libstele` defines the standard isomorphic C capability contract used across the entire `tty.pt` stack:
 
-- `<ttypt/stele.h>`: Cross-platform POSIX/Win32 socket and system shims.
+- `<ttypt/stele.h>`: Cross-platform POSIX/Win32 socket, local IPC (`stl_ipc_*`), wake (`stl_wake_*`), subprocess (`stl_spawn`/`stl_proc_*`), user/path, and system shims.
 - `<ttypt/iso.h>`: Universal `ISO_EXPORT` and `ISO_IMPORT` macros for isomorphic C modules compiled natively for SSR and into `.wasm` for the browser.
 - `<ttypt/wq.h>`: Cross-platform lock-free workqueue (`stl_wq_*` / `stele_wq_*`), logical processor discovery (`stl_cpu_count`), and `STL_THREAD_LOCAL` storage across POSIX threads, Win32 threads, and WebAssembly workers.
 - `<ttypt/stele_wasm.h>`: Universal single-instantiation WASM kernel substrate and slot orchestration ABI.

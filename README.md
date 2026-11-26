@@ -73,7 +73,10 @@ cc server.c $(pkg-config --cflags --libs stele) -o server
 | Subsystem | Header | Key Functions & Macros |
 | :--- | :--- | :--- |
 | **Logging & Assertions** | `<ttypt/stele.h>` | `LOG()`, `WARN()`, `ERR()`, `CBUG(cond, ...)`, `stllog_set()`, `stl_syslog()` |
-| **Sockets & Multiplexing** | `<ttypt/stele.h>` | `stl_sock_create()`, `stl_sock_set_nonblock()`, `stl_poll()`, `stl_ignore_pipe()` |
+| **Sockets & Multiplexing** | `<ttypt/stele.h>` | `stl_sock_create()`, `stl_sock_set_nonblock()`, `stl_sock_set_timeout()`, `stl_poll()`, `stl_ignore_pipe()` |
+| **Local IPC & Wake Primitives** | `<ttypt/stele.h>` | `stl_ipc_listen()`, `stl_ipc_accept()`, `stl_ipc_connect()`, `stl_ipc_close_listener()`, `stl_wake_init()`, `stl_wake_signal()`, `stl_wake_drain()` |
+| **Subprocess Management** | `<ttypt/stele.h>` | `stl_spawn()`, `stl_spawn_detached()`, `stl_proc_wait()`, `stl_proc_kill()`, `stl_proc_close()`, `STL_SPAWN_*` |
+| **User, Path & Library Helpers** | `<ttypt/stele.h>` | `stl_username()`, `stl_home_dir()`, `stl_temp_dir()`, `stl_config_dir()`, `stl_data_dir()`, `stl_exe_dir()`, `stl_so_ext()`, `stl_mkdir_p()` |
 | **High-Res Timing & Diagnostics** | `<ttypt/stele.h>` | `stl_now_ms()`, `stl_sleep_ms()`, `stl_pid_alive()`, `stl_self_rss_bytes()` |
 | **Advisory File Locking** | `<ttypt/stele.h>` | `stl_flock(fd, STL_LOCK_EX \| STL_LOCK_NB)`, `stl_dprintf()`, `stl_ftruncate()` |
 | **Dynamic Loading** | `<ttypt/stele.h>` | `stl_dlopen()`, `stl_dlsym()`, `stl_dlclose()` with `STL_RTLD_NODELETE` |
