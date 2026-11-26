@@ -156,6 +156,11 @@ ISO_EXPORT(void, stl_wq_wait, stl_wq_t *wq, stl_wq_task_t *task);
 ISO_EXPORT(void, stl_wq_drain, stl_wq_t *wq);
 
 /**
+ * @brief Query the number of active worker threads backing `wq` (0 = cooperative single-threaded).
+ */
+unsigned int stl_wq_thread_count(const stl_wq_t *wq);
+
+/**
  * @brief Drain all pending work, stop worker threads, and free `wq`.
  */
 ISO_EXPORT(void, stl_wq_destroy, stl_wq_t *wq);

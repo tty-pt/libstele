@@ -366,6 +366,11 @@ ISO_EXPORT(int, stl_wq_submit, stl_wq_t *wq, stl_wq_task_t *task, stl_wq_fn fn, 
 	return 0;
 }
 
+unsigned int stl_wq_thread_count(const stl_wq_t *wq)
+{
+	return wq ? wq->nthreads : 0u;
+}
+
 ISO_EXPORT(unsigned int, stl_wq_step, stl_wq_t *wq, unsigned int max_tasks)
 {
 	unsigned int ran = 0;
